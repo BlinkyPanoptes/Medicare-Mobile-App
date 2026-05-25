@@ -1,11 +1,13 @@
 import { router } from "expo-router";
 import {
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
+
+import { useAuth } from "@/components/context/auth-context";
 
 type ButtonRoute =
   | "/patient-records"
@@ -43,6 +45,8 @@ export default function Dashboard() {
     );
   };
 
+  const { user } = useAuth();
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Medical Records Dashboard</Text>
@@ -60,11 +64,37 @@ export default function Dashboard() {
           <ButtonCard key={btn.route} label={btn.label} route={btn.route} />
         ))}
       </View>
+      <View style={{ height: 40 }}>
+        {user?.role === "doctor" && (
+          <TouchableOpacity
+            style={styles.doctorButton}
+            onPress={() => console.log("Doctor's test button pressed")}
+          >
+            <Text style={styles.doctorButtonText}>Doctor Login Test</Text>
+          </TouchableOpacity>
+        )}
+      </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
+  doctorButton: {
+    backgroundColor: "#095c29",
+    paddingVertical: 14,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 10,
+    minHeight: 50,
+  },
+
+  doctorButtonText: {
+    color: "#fff",
+    fontWeight: "bold",
+  },
+
   container: {
     flex: 1,
     backgroundColor: "#f5f7fb",

@@ -1,23 +1,50 @@
 import { router } from "expo-router";
 import { useState } from "react";
 import {
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
+
+import { useAuth } from "@/components/context/auth-context";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const handleLogin = () => {
-    const validEmail = "test@cravecare.com";
-    const validPassword = "12345678";
+  const { login } = useAuth();
 
-    if (email === validEmail && password === validPassword) {
-      router.replace("/dashboard"); // go to dashboard (index)
+  //temporary test login, replace later with real auth logic
+  const handleLogin = () => {
+    const doctorEmail = "doctor@cravecare.com";
+    const doctorPassword = "12345678";
+
+    const assistantEmail = "assistant@cravecare.com";
+    const assistantPassword = "12345678";
+
+    const adminEmail = "admin@cravecare.com";
+    const adminPassword = "12345678";
+
+    if (email === doctorEmail && password === doctorPassword) {
+      login({
+        email,
+        role: "doctor",
+      });
+      router.replace("/dashboard"); // go to dashboard
+    } else if (email === assistantEmail && password === assistantPassword) {
+      login({
+        email,
+        role: "assistant",
+      });
+      router.replace("/dashboard"); // go to dashboard
+    } else if (email === adminEmail && password === adminPassword) {
+      login({
+        email,
+        role: "admin",
+      });
+      router.replace("/dashboard"); // replace with admin dashboard later
     } else {
       alert("Invalid email or password");
     }
@@ -25,7 +52,7 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Medical Records System</Text>
+      <Text style={styles.title}>CraveCare{"\n"}E-Medical Record System</Text>
       <Text style={styles.subtitle}>Login to continue</Text>
 
       <TextInput
