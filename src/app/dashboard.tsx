@@ -7,8 +7,6 @@ import {
   View,
 } from "react-native";
 
-import { useAuth } from "@/components/context/auth-context";
-
 type ButtonRoute =
   | "/patient-records"
   | "/consultations"
@@ -45,8 +43,6 @@ export default function Dashboard() {
     );
   };
 
-  const { user } = useAuth();
-
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Medical Records Dashboard</Text>
@@ -63,16 +59,6 @@ export default function Dashboard() {
         {DrugButtons.map((btn) => (
           <ButtonCard key={btn.route} label={btn.label} route={btn.route} />
         ))}
-      </View>
-      <View style={{ height: 40 }}>
-        {user?.role === "doctor" && (
-          <TouchableOpacity
-            style={styles.doctorButton}
-            onPress={() => console.log("Doctor's test button pressed")}
-          >
-            <Text style={styles.doctorButtonText}>Doctor Login Test</Text>
-          </TouchableOpacity>
-        )}
       </View>
     </ScrollView>
   );
