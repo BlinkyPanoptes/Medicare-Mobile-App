@@ -27,11 +27,16 @@ type ButtonCardProps = ButtonItem;
 export default function Dashboard() {
   const { width } = useWindowDimensions();
 
-  // 👇 breakpoint for tablet
-  const isTablet = width >= 768;
-  const numColumns = isTablet ? 3 : 2;
+  // ✅ smarter responsive column system
+  const getColumns = () => {
+    if (width >= 1024) return 4; // large tablets / desktop-like
+    if (width >= 768) return 3; // tablets
+    if (width >= 600) return 3; // phone landscape
+    return 2; // phone portrait
+  };
 
-  const cardWidth = `${100 / numColumns - 2}%`;
+  const columns = getColumns();
+  const cardWidth = `${100 / columns - 2}%`;
 
   const clinicButtons: ButtonItem[] = [
     { label: "Patient Records", route: "/patient-records", icon: "🩺" },
@@ -49,7 +54,7 @@ export default function Dashboard() {
     return (
       <TouchableOpacity
         activeOpacity={0.85}
-        style={[styles.card, { width: cardWidth }]}
+        style={[styles.card, { flexBasis: `${100 / columns - 2}%` }]}
         onPress={() => router.push(route)}
       >
         <View style={styles.iconContainer}>
