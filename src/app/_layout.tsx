@@ -21,10 +21,10 @@ function RootStack() {
       <Stack.Screen
         name="dashboard"
         options={{
-          title:
-            user?.role === "doctor"
-              ? "Welcome, Dr. Pedrajas" //replace with actual doctor name
-              : "Welcome, Mr. Dudz", //replace with actual assistant name
+          // Safely updates title dynamically using only the email string
+          title: user
+            ? `Welcome, ${user.role === "doctor" ? "Dr. " : ""}${user.email.split("@")[0]}`
+            : "Welcome",
           ...headerStyles,
         }}
       />

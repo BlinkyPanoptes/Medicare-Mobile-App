@@ -8,6 +8,8 @@ import {
   useWindowDimensions,
 } from "react-native";
 
+import { useAuth } from "@/components/context/auth-context";
+
 type ButtonRoute =
   | "/patient-records"
   | "/consultations"
@@ -26,6 +28,12 @@ type ButtonCardProps = ButtonItem;
 
 export default function Dashboard() {
   const { width } = useWindowDimensions();
+  const { logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    router.replace("/login");
+  };
 
   // ✅ smarter responsive column system
   const getColumns = () => {
@@ -113,6 +121,15 @@ export default function Dashboard() {
           <ButtonCard key={btn.route} {...btn} />
         ))}
       </View>
+      
+      <TouchableOpacity
+        activeOpacity={0.85}
+        style={styles.logoutButton}
+        onPress={handleLogout}
+      >
+        <Text style={styles.logoutButtonText}>Log Out Session</Text>
+      </TouchableOpacity>
+
     </ScrollView>
   );
 }
@@ -225,5 +242,26 @@ const styles = StyleSheet.create({
   cardSubtext: {
     fontSize: 12,
     color: "#6b7280",
+  },
+  logoutButton: {
+    backgroundColor: "#ffffff",
+    borderRadius: 20,
+    padding: 16,
+    marginTop: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#fca5a5",
+
+    shadowColor: "#000",
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  logoutButtonText: {
+    color: "#ef4444",
+    fontSize: 15,
+    fontWeight: "700",
   },
 });
