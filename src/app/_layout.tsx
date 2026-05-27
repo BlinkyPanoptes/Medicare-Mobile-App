@@ -30,6 +30,14 @@ function RootStack() {
       />
 
       <Stack.Screen
+        name="admin-dashboard"
+        options={{
+          title: "Admin Control Panel",
+          ...headerStyles,
+        }}
+      />
+
+      <Stack.Screen
         name="patient-records"
         options={{
           title: "Patient Records",

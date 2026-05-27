@@ -1,11 +1,12 @@
 import { router } from "expo-router";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
+  Alert,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 
 import { useAuth } from "@/components/context/auth-context";
@@ -18,6 +19,7 @@ export default function LoginScreen() {
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [lockoutTimeLeft, setLockoutTimeLeft] = useState(0); // remaining seconds
 
+  // Pulling the new async login function from our updated context
   const { login } = useAuth();
 
   // Handle countdown timer decrement if user is locked out
@@ -38,48 +40,36 @@ export default function LoginScreen() {
     return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
   };
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     // 1. Guard check if user is currently under cooldown
     if (lockoutTimeLeft > 0) {
-      alert(`Too many failed attempts. Please wait ${formatTime(lockoutTimeLeft)} before trying again.`);
+      Alert.alert("Locked Out", `Too many failed attempts. Please wait ${formatTime(lockoutTimeLeft)} before trying again.`);
       return;
     }
 
-    const doctorEmail = "doctor@cravecare.com";
-    const doctorPassword = "12345678";
+    try {
+      // Capture the returned user data
+      const userData = await login(email, password);
 
-    const assistantEmail = "assistant@cravecare.com";
-    const assistantPassword = "12345678";
-
-    const adminEmail = "admin@cravecare.com";
-    const adminPassword = "12345678";
-
-    const isDoctor = email === doctorEmail && password === doctorPassword;
-    const isAssistant = email === assistantEmail && password === assistantPassword;
-    const isAdmin = email === adminEmail && password === adminPassword;
-
-    if (isDoctor || isAssistant || isAdmin) {
-      // Success path: Reset tracking metrics
       setFailedAttempts(0);
       
-      if (isDoctor) {
-        login({ email, role: "doctor" });
-      } else if (isAssistant) {
-        login({ email, role: "assistant" });
-      } else if (isAdmin) {
-        login({ email, role: "admin" });
+      // Route based on role
+      if (userData.role === 'ADMIN') {
+        router.replace("/admin-dashboard");
+      } else {
+        router.replace("/dashboard");
       }
-      router.replace("/dashboard");
-    } else {
-      // Failure path: Increment tracker increments
+      
+    } catch (error) {
+      // Failure path: Increment tracker increments when the backend rejects the login
       const nextAttempts = failedAttempts + 1;
       setFailedAttempts(nextAttempts);
 
       if (nextAttempts >= 5) {
         setLockoutTimeLeft(180); // ⏱️ Lockout duration set to 3 minutes (180 seconds)
-        alert("Too many failed attempts. Login has been suspended for 3 minutes.");
+        Alert.alert("Locked Out", "Too many failed attempts. Login has been suspended for 3 minutes.");
       } else {
-        alert(`Invalid email or password. Try Again!`);
+        Alert.alert("Error", "Invalid email or password. Try Again!");
       }
     }
   };
@@ -96,7 +86,7 @@ export default function LoginScreen() {
         style={styles.input}
         autoCapitalize="none"
         keyboardType="email-address"
-        editable={lockoutTimeLeft === 0} // Optional visual disabled cue during lock
+        editable={lockoutTimeLeft === 0} // Visual disabled cue during lock
       />
 
       <TextInput
@@ -105,7 +95,7 @@ export default function LoginScreen() {
         onChangeText={setPassword}
         secureTextEntry
         style={styles.input}
-        editable={lockoutTimeLeft === 0} // Optional visual disabled cue during lock
+        editable={lockoutTimeLeft === 0} // Visual disabled cue during lock
       />
 
       <TouchableOpacity 
