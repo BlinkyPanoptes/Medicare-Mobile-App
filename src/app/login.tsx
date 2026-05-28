@@ -6,7 +6,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
 } from "react-native";
 
 import { useAuth } from "@/components/context/auth-context";
@@ -14,26 +14,22 @@ import { useAuth } from "@/components/context/auth-context";
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   
-  // 🔒 Throttling states
   const [failedAttempts, setFailedAttempts] = useState(0);
-  const [lockoutTimeLeft, setLockoutTimeLeft] = useState(0); // remaining seconds
+  const [lockoutTimeLeft, setLockoutTimeLeft] = useState(0); 
 
-  // Pulling the new async login function from our updated context
+  // We are pulling your new login function from the context
   const { login } = useAuth();
 
-  // Handle countdown timer decrement if user is locked out
   useEffect(() => {
     if (lockoutTimeLeft <= 0) return;
-
     const timer = setInterval(() => {
       setLockoutTimeLeft((prev) => prev - 1);
     }, 1000);
-
     return () => clearInterval(timer);
   }, [lockoutTimeLeft]);
 
-  // Format seconds into MM:SS for user visibility
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -41,36 +37,45 @@ export default function LoginScreen() {
   };
 
   const handleLogin = async () => {
-    // 1. Guard check if user is currently under cooldown
     if (lockoutTimeLeft > 0) {
-      Alert.alert("Locked Out", `Too many failed attempts. Please wait ${formatTime(lockoutTimeLeft)} before trying again.`);
+      Alert.alert("Locked Out", `Please wait ${formatTime(lockoutTimeLeft)} before trying again.`);
       return;
     }
 
+    setIsLoading(true);
+
     try {
-      // Capture the returned user data
-      const userData = await login(email, password);
-
+      // Look how clean this is now! We just pass the email and password to your context.
+      // The context does all the Axios fetching and SecureStore saving for us.
+      await login(email, password);
+      
+      // If the above line doesn't throw an error, it was a success!
       setFailedAttempts(0);
-      
-      // Route based on role
-      if (userData.role === 'ADMIN') {
-        router.replace("/admin-dashboard");
-      } else {
-        router.replace("/dashboard");
-      }
-      
-    } catch (error) {
-      // Failure path: Increment tracker increments when the backend rejects the login
-      const nextAttempts = failedAttempts + 1;
-      setFailedAttempts(nextAttempts);
+      router.replace("/dashboard");
 
-      if (nextAttempts >= 5) {
-        setLockoutTimeLeft(180); // ⏱️ Lockout duration set to 3 minutes (180 seconds)
-        Alert.alert("Locked Out", "Too many failed attempts. Login has been suspended for 3 minutes.");
+    } catch (error: any) {
+      // If the context throws an error (wrong password or network issue), we catch it here
+      if (error.response) {
+        console.log("SERVER REJECTED LOGIN:", error.response.data);
+        handleFailedAttempt();
       } else {
-        Alert.alert("Error", "Invalid email or password. Try Again!");
+        console.error("NETWORK ERROR:", error.message);
+        Alert.alert("Connection Error", "Ensure your server is running and reachable.");
       }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleFailedAttempt = () => {
+    const nextAttempts = failedAttempts + 1;
+    setFailedAttempts(nextAttempts);
+
+    if (nextAttempts >= 5) {
+      setLockoutTimeLeft(180); 
+      Alert.alert("Account Locked", "Too many failed attempts. Login has been suspended for 3 minutes.");
+    } else {
+      Alert.alert("Login Failed", "Invalid email or password. Try Again!");
     }
   };
 
@@ -86,7 +91,7 @@ export default function LoginScreen() {
         style={styles.input}
         autoCapitalize="none"
         keyboardType="email-address"
-        editable={lockoutTimeLeft === 0} // Visual disabled cue during lock
+        editable={lockoutTimeLeft === 0 && !isLoading} 
       />
 
       <TextInput
@@ -95,19 +100,19 @@ export default function LoginScreen() {
         onChangeText={setPassword}
         secureTextEntry
         style={styles.input}
-        editable={lockoutTimeLeft === 0} // Visual disabled cue during lock
+        editable={lockoutTimeLeft === 0 && !isLoading} 
       />
 
       <TouchableOpacity 
         style={[
           styles.button, 
-          lockoutTimeLeft > 0 && { backgroundColor: "#6b7280", opacity: 0.7 } // Muted gray style state for locking layout
+          (lockoutTimeLeft > 0 || isLoading) && { backgroundColor: "#6b7280", opacity: 0.7 }
         ]} 
         onPress={handleLogin}
-        disabled={lockoutTimeLeft > 0}
+        disabled={lockoutTimeLeft > 0 || isLoading}
       >
         <Text style={styles.buttonText}>
-          {lockoutTimeLeft > 0 ? `Locked Out (${formatTime(lockoutTimeLeft)})` : "Login"}
+          {isLoading ? "Logging in..." : lockoutTimeLeft > 0 ? `Locked Out (${formatTime(lockoutTimeLeft)})` : "Login"}
         </Text>
       </TouchableOpacity>
     </View>
