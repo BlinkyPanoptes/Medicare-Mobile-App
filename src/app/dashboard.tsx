@@ -2,15 +2,15 @@ import { useAuth } from "@/components/context/auth-context";
 import { ButtonCard, Card } from "@/components/ui";
 import { theme } from "@/theme";
 import { UserRole } from "@/types/user";
+import { router } from "expo-router";
 import {
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   useWindowDimensions,
   View,
 } from "react-native";
-
-import { useAuth } from "@/components/context/auth-context";
 
 type ButtonRoute =
   | "/patient-records"
@@ -30,7 +30,9 @@ type ButtonItem = {
 
 export default function Dashboard() {
   const { width } = useWindowDimensions();
-  const { logout } = useAuth();
+  
+  // Destructure both user data and logout function cleanly at once
+  const { user, logout } = useAuth();
 
   const handleLogout = () => {
     logout();
@@ -46,7 +48,6 @@ export default function Dashboard() {
   };
 
   const columns = getColumns();
-
   const cardWidth = 100 / columns - 2;
 
   const clinicButtons: ButtonItem[] = [
@@ -98,15 +99,22 @@ export default function Dashboard() {
   ];
 
   // Filter buttons based on user role
-  const { user } = useAuth();
-  const fiterByRole = (btn: ButtonItem) => {
+  const filterByRole = (btn: ButtonItem) => {
     if (!btn.allowedRoles) return true; // if no roles specified, show to all
     if (!user) return false; // if no user, hide role-specific buttons
-    return btn.allowedRoles.includes(user.role);
+    return btn.allowedRoles.includes(btn.allowedRoles.includes(user.role) ? user.role : (user.role as any));
   };
 
-  const filteredClinicButtons = clinicButtons.filter(fiterByRole);
-  const filteredDrugButtons = drugButtons.filter(fiterByRole);
+  const filteredClinicButtons = clinicButtons.filter(filterByRole);
+  const filteredDrugButtons = drugButtons.filter(filterByRole);
+
+  // Helper to display a clean avatar name placeholder depending on user role
+  const getAvatarText = () => {
+    if (!user) return "EMR";
+    if (user.role === "doctor") return "DOC";
+    if (user.role === "assistant") return "AST";
+    return "ADM";
+  };
 
   return (
     <ScrollView
@@ -117,12 +125,14 @@ export default function Dashboard() {
       {/* HEADER */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.greeting}>Good Day 👋</Text>
+          <Text style={styles.greeting}>
+            Good Day, {user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'Staff' : 'Staff'} 👋
+          </Text>
           <Text style={styles.title}>Medical Dashboard</Text>
         </View>
 
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>DR</Text>
+          <Text style={styles.avatarText}>{getAvatarText()}</Text>
         </View>
       </View>
 
@@ -173,6 +183,7 @@ export default function Dashboard() {
         ))}
       </View>
       
+      {/* LOGOUT */}
       <TouchableOpacity
         activeOpacity={0.85}
         style={styles.logoutButton}
@@ -190,31 +201,26 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.background,
   },
-
   content: {
     padding: theme.spacing.md,
     paddingBottom: theme.spacing.lg,
   },
-
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 24,
   },
-
   greeting: {
     fontSize: 14,
     color: theme.colors.muted,
     marginBottom: 4,
   },
-
   title: {
     fontSize: 30,
     fontWeight: "bold",
     color: theme.colors.text,
   },
-
   avatar: {
     width: 52,
     height: 52,
@@ -223,50 +229,42 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-
   avatarText: {
     color: "#fff",
     fontWeight: "bold",
-    fontSize: 16,
+    fontSize: 14,
   },
-
   welcomeCard: {
     backgroundColor: theme.colors.primary,
     borderRadius: 22,
     padding: 22,
     marginBottom: 30,
   },
-
   welcomeTitle: {
     color: "#fff",
     fontSize: 20,
     fontWeight: "700",
     marginBottom: 10,
   },
-
   welcomeText: {
     color: theme.colors.white,
     fontSize: 14,
     lineHeight: 22,
   },
-
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
     marginBottom: 18,
   },
-
   sectionHeader: {
     marginBottom: 14,
   },
-
   sectionTitle: {
     fontSize: 20,
     fontWeight: "700",
     color: theme.colors.text,
   },
-
   sectionSubtitle: {
     fontSize: 13,
     color: theme.colors.muted,
@@ -281,7 +279,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1,
     borderColor: "#fca5a5",
-
     shadowColor: "#000",
     shadowOpacity: 0.03,
     shadowRadius: 6,
