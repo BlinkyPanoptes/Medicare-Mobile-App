@@ -24,11 +24,10 @@ const API_URL = 'http://192.168.1.32:8000/api';
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<User | null>(null); // State for the user object
+  const [user, setUser] = useState<User | null>(null); 
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check for token and user data on app load
     const loadContext = async () => {
       try {
         const storedToken = await SecureStore.getItemAsync('userToken');
@@ -36,7 +35,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         
         if (storedToken && storedUser) {
           setToken(storedToken);
-          setUser(JSON.parse(storedUser)); // Parse the stringified JSON back into an object
+          setUser(JSON.parse(storedUser)); 
         }
       } catch (error) {
         console.error("Failed to load auth data", error);
@@ -51,14 +50,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       const response = await axios.post(`${API_URL}/login`, { email, password });
       
-      // Destructure both token and user from the backend response
       const { token: newToken, user: userData } = response.data; 
       
-      // Save both to SecureStore
       await SecureStore.setItemAsync('userToken', newToken);
       await SecureStore.setItemAsync('userData', JSON.stringify(userData)); 
       
-      // Update React state
       setToken(newToken);
       setUser(userData);
       return userData;

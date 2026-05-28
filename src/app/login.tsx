@@ -19,7 +19,7 @@ export default function LoginScreen() {
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [lockoutTimeLeft, setLockoutTimeLeft] = useState(0); 
 
-  // We are pulling your new login function from the context
+  // Pulling login function from your real backend context
   const { login } = useAuth();
 
   useEffect(() => {
@@ -45,16 +45,13 @@ export default function LoginScreen() {
     setIsLoading(true);
 
     try {
-      // Look how clean this is now! We just pass the email and password to your context.
-      // The context does all the Axios fetching and SecureStore saving for us.
+      // Connects to the real backend database
       await login(email, password);
       
-      // If the above line doesn't throw an error, it was a success!
       setFailedAttempts(0);
       router.replace("/dashboard");
 
     } catch (error: any) {
-      // If the context throws an error (wrong password or network issue), we catch it here
       if (error.response) {
         console.log("SERVER REJECTED LOGIN:", error.response.data);
         handleFailedAttempt();

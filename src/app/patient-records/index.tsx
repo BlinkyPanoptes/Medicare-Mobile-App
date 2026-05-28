@@ -1,10 +1,10 @@
 import { useAuth } from "@/components/context/auth-context";
 import {
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 
 export default function PatientRecordsScreen() {
