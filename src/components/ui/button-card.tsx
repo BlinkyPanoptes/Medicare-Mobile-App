@@ -9,9 +9,17 @@ type Props = {
   route: any;
   icon: string;
   cardWidth: number;
+  description: string;
+  allowedRoles?: ("doctor" | "assistant" | "admin")[];
 };
 
-export default function ButtonCard({ label, route, icon, cardWidth }: Props) {
+export default function ButtonCard({
+  label,
+  route,
+  icon,
+  cardWidth,
+  description,
+}: Props) {
   return (
     <TouchableOpacity
       activeOpacity={0.85}
@@ -23,7 +31,7 @@ export default function ButtonCard({ label, route, icon, cardWidth }: Props) {
       </View>
 
       <Text style={styles.label}>{label}</Text>
-      <Text style={styles.sub}>Open Module</Text>
+      <Text style={styles.sub}>{description}</Text>
     </TouchableOpacity>
   );
 }

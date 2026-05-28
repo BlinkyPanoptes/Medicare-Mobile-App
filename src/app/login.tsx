@@ -9,6 +9,7 @@ import {
 } from "react-native";
 
 import { useAuth } from "@/components/context/auth-context";
+import { User } from "@/types/user";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -18,32 +19,48 @@ export default function LoginScreen() {
 
   //temporary test login, replace later with real auth logic
   const handleLogin = () => {
-    const doctorEmail = "doctor@cravecare.com";
     const doctorPassword = "12345678";
-
-    const assistantEmail = "assistant@cravecare.com";
     const assistantPassword = "12345678";
-
-    const adminEmail = "admin@cravecare.com";
     const adminPassword = "12345678";
 
-    if (email === doctorEmail && password === doctorPassword) {
-      login({
-        email,
-        role: "doctor",
-      });
+    const doctorUser: User = {
+      id: "1",
+      firstName: "",
+      lastName: "",
+      email: "doctor@cravecare.com",
+      phoneNumber: "",
+      role: "doctor",
+    };
+
+    const assistantUser: User = {
+      id: "2",
+      firstName: "",
+      lastName: "",
+      email: "assistant@cravecare.com",
+      phoneNumber: "",
+      role: "assistant",
+    };
+
+    const adminUser: User = {
+      id: "3",
+      firstName: "",
+      lastName: "",
+      email: "admin@cravecare.com",
+      phoneNumber: "",
+      role: "admin",
+    };
+
+    if (email === doctorUser.email && password === doctorPassword) {
+      login(doctorUser);
       router.replace("/dashboard"); // go to dashboard
-    } else if (email === assistantEmail && password === assistantPassword) {
-      login({
-        email,
-        role: "assistant",
-      });
+    } else if (
+      email === assistantUser.email &&
+      password === assistantPassword
+    ) {
+      login(assistantUser);
       router.replace("/dashboard"); // go to dashboard
-    } else if (email === adminEmail && password === adminPassword) {
-      login({
-        email,
-        role: "admin",
-      });
+    } else if (email === adminUser.email && password === adminPassword) {
+      login(adminUser);
       router.replace("/dashboard"); // replace with admin dashboard later
     } else {
       alert("Invalid email or password");

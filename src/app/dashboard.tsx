@@ -1,5 +1,7 @@
+import { useAuth } from "@/components/context/auth-context";
 import { ButtonCard, Card } from "@/components/ui";
 import { theme } from "@/theme";
+import { UserRole } from "@/types/user";
 import {
   ScrollView,
   StyleSheet,
@@ -20,11 +22,14 @@ type ButtonItem = {
   label: string;
   route: ButtonRoute;
   icon: string;
+  description: string;
+  allowedRoles?: UserRole[];
 };
 
 export default function Dashboard() {
   const { width } = useWindowDimensions();
 
+  // determines number of button columns based on screen width
   const getColumns = () => {
     if (width >= 1024) return 4;
     if (width >= 768) return 3;
@@ -37,16 +42,63 @@ export default function Dashboard() {
   const cardWidth = 100 / columns - 2;
 
   const clinicButtons: ButtonItem[] = [
-    { label: "Patient Records", route: "/patient-records", icon: "🩺" },
-    { label: "Consultations", route: "/consultations", icon: "📋" },
-    { label: "Transactions", route: "/transactions", icon: "💳" },
+    {
+      label: "Patient Records",
+      route: "/patient-records",
+      icon: "🩺",
+      description: "View and manage patient information",
+      allowedRoles: ["doctor", "assistant"],
+    },
+    {
+      label: "Consultations",
+      route: "/consultations",
+      icon: "📋",
+      description: "Manage prescriptions and medical certificates",
+      allowedRoles: ["doctor"],
+    },
+    {
+      label: "Transactions",
+      route: "/transactions",
+      icon: "💳",
+      description: "View previous consultations",
+      allowedRoles: ["doctor", "assistant"],
+    },
   ];
 
   const drugButtons: ButtonItem[] = [
-    { label: "Brand Directory", route: "/brand-directory", icon: "💊" },
-    { label: "Generics", route: "/generics", icon: "🧪" },
-    { label: "Diseases", route: "/diseases", icon: "🦠" },
+    {
+      label: "Brand Directory",
+      route: "/brand-directory",
+      icon: "💊",
+      description: "View and manage branded medications",
+      allowedRoles: ["doctor", "assistant"],
+    },
+    {
+      label: "Generics",
+      route: "/generics",
+      icon: "🧪",
+      description: "View and manage generic medications",
+      allowedRoles: ["doctor", "assistant"],
+    },
+    {
+      label: "Diseases",
+      route: "/diseases",
+      icon: "🦠",
+      description: "View and manage disease information",
+      allowedRoles: ["doctor", "assistant"],
+    },
   ];
+
+  // Filter buttons based on user role
+  const { user } = useAuth();
+  const fiterByRole = (btn: ButtonItem) => {
+    if (!btn.allowedRoles) return true; // if no roles specified, show to all
+    if (!user) return false; // if no user, hide role-specific buttons
+    return btn.allowedRoles.includes(user.role);
+  };
+
+  const filteredClinicButtons = clinicButtons.filter(fiterByRole);
+  const filteredDrugButtons = drugButtons.filter(fiterByRole);
 
   return (
     <ScrollView
@@ -82,12 +134,13 @@ export default function Dashboard() {
       </View>
 
       <View style={styles.grid}>
-        {clinicButtons.map((btn) => (
+        {filteredClinicButtons.map((btn) => (
           <ButtonCard
             key={btn.route}
             label={btn.label}
             route={btn.route}
             icon={btn.icon}
+            description={btn.description}
             cardWidth={cardWidth}
           />
         ))}
@@ -100,12 +153,13 @@ export default function Dashboard() {
       </View>
 
       <View style={styles.grid}>
-        {drugButtons.map((btn) => (
+        {filteredDrugButtons.map((btn) => (
           <ButtonCard
             key={btn.route}
             label={btn.label}
             route={btn.route}
             icon={btn.icon}
+            description={btn.description}
             cardWidth={cardWidth}
           />
         ))}
