@@ -1,6 +1,7 @@
 import { router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  Alert,
   StyleSheet,
   Text,
   TextInput,
@@ -9,61 +10,80 @@ import {
 } from "react-native";
 
 import { useAuth } from "@/components/context/auth-context";
-import { User } from "@/types/user";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [lockoutTimeLeft, setLockoutTimeLeft] = useState(0);
+
+  // We are pulling your new login function from the context
   const { login } = useAuth();
 
-  //temporary test login, replace later with real auth logic
-  const handleLogin = () => {
-    const doctorPassword = "12345678";
-    const assistantPassword = "12345678";
-    const adminPassword = "12345678";
+  useEffect(() => {
+    if (lockoutTimeLeft <= 0) return;
+    const timer = setInterval(() => {
+      setLockoutTimeLeft((prev) => prev - 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [lockoutTimeLeft]);
 
-    const doctorUser: User = {
-      id: "1",
-      firstName: "",
-      lastName: "",
-      email: "doctor@cravecare.com",
-      phoneNumber: "",
-      role: "doctor",
-    };
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
+  };
 
-    const assistantUser: User = {
-      id: "2",
-      firstName: "",
-      lastName: "",
-      email: "assistant@cravecare.com",
-      phoneNumber: "",
-      role: "assistant",
-    };
+  const handleLogin = async () => {
+    if (lockoutTimeLeft > 0) {
+      Alert.alert(
+        "Locked Out",
+        `Please wait ${formatTime(lockoutTimeLeft)} before trying again.`,
+      );
+      return;
+    }
 
-    const adminUser: User = {
-      id: "3",
-      firstName: "",
-      lastName: "",
-      email: "admin@cravecare.com",
-      phoneNumber: "",
-      role: "admin",
-    };
+    setIsLoading(true);
 
-    if (email === doctorUser.email && password === doctorPassword) {
-      login(doctorUser);
-      router.replace("/dashboard"); // go to dashboard
-    } else if (
-      email === assistantUser.email &&
-      password === assistantPassword
-    ) {
-      login(assistantUser);
-      router.replace("/dashboard"); // go to dashboard
-    } else if (email === adminUser.email && password === adminPassword) {
-      login(adminUser);
-      router.replace("/dashboard"); // replace with admin dashboard later
+    try {
+      // Look how clean this is now! We just pass the email and password to your context.
+      // The context does all the Axios fetching and SecureStore saving for us.
+      await login(email, password);
+
+      // If the above line doesn't throw an error, it was a success!
+      setFailedAttempts(0);
+      router.replace("/dashboard");
+    } catch (error: any) {
+      // If the context throws an error (wrong password or network issue), we catch it here
+      if (error.response) {
+        console.log("SERVER REJECTED LOGIN:", error.response.data);
+        handleFailedAttempt();
+      } else {
+        console.error("NETWORK ERROR:", error.message);
+        Alert.alert(
+          "Connection Error",
+          "Ensure your server is running and reachable.",
+        );
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleFailedAttempt = () => {
+    const nextAttempts = failedAttempts + 1;
+    setFailedAttempts(nextAttempts);
+
+    if (nextAttempts >= 5) {
+      setLockoutTimeLeft(180);
+      Alert.alert(
+        "Account Locked",
+        "Too many failed attempts. Login has been suspended for 3 minutes.",
+      );
     } else {
-      alert("Invalid email or password");
+      Alert.alert("Login Failed", "Invalid email or password. Try Again!");
     }
   };
 
@@ -78,6 +98,8 @@ export default function LoginScreen() {
         onChangeText={setEmail}
         style={styles.input}
         autoCapitalize="none"
+        keyboardType="email-address"
+        editable={lockoutTimeLeft === 0 && !isLoading}
       />
 
       <TextInput
@@ -86,10 +108,27 @@ export default function LoginScreen() {
         onChangeText={setPassword}
         secureTextEntry
         style={styles.input}
+        editable={lockoutTimeLeft === 0 && !isLoading}
       />
 
-      <TouchableOpacity style={styles.button} onPress={handleLogin}>
-        <Text style={styles.buttonText}>Login</Text>
+      <TouchableOpacity
+        style={[
+          styles.button,
+          (lockoutTimeLeft > 0 || isLoading) && {
+            backgroundColor: "#6b7280",
+            opacity: 0.7,
+          },
+        ]}
+        onPress={handleLogin}
+        disabled={lockoutTimeLeft > 0 || isLoading}
+      >
+        <Text style={styles.buttonText}>
+          {isLoading
+            ? "Logging in..."
+            : lockoutTimeLeft > 0
+              ? `Locked Out (${formatTime(lockoutTimeLeft)})`
+              : "Login"}
+        </Text>
       </TouchableOpacity>
     </View>
   );

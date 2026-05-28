@@ -2,10 +2,12 @@ import { useAuth } from "@/components/context/auth-context";
 import { ButtonCard, Card } from "@/components/ui";
 import { theme } from "@/theme";
 import { UserRole } from "@/types/user";
+import { router } from "expo-router";
 import {
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -28,6 +30,12 @@ type ButtonItem = {
 
 export default function Dashboard() {
   const { width } = useWindowDimensions();
+  const { user, logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    router.replace("/login");
+  };
 
   // determines number of button columns based on screen width
   const getColumns = () => {
@@ -38,7 +46,6 @@ export default function Dashboard() {
   };
 
   const columns = getColumns();
-
   const cardWidth = 100 / columns - 2;
 
   const clinicButtons: ButtonItem[] = [
@@ -90,15 +97,14 @@ export default function Dashboard() {
   ];
 
   // Filter buttons based on user role
-  const { user } = useAuth();
-  const fiterByRole = (btn: ButtonItem) => {
+  const filterByRole = (btn: ButtonItem) => {
     if (!btn.allowedRoles) return true; // if no roles specified, show to all
     if (!user) return false; // if no user, hide role-specific buttons
     return btn.allowedRoles.includes(user.role);
   };
 
-  const filteredClinicButtons = clinicButtons.filter(fiterByRole);
-  const filteredDrugButtons = drugButtons.filter(fiterByRole);
+  const filteredClinicButtons = clinicButtons.filter(filterByRole);
+  const filteredDrugButtons = drugButtons.filter(filterByRole);
 
   return (
     <ScrollView
@@ -164,6 +170,15 @@ export default function Dashboard() {
           />
         ))}
       </View>
+
+      {/* LOGOUT */}
+      <TouchableOpacity
+        activeOpacity={0.85}
+        style={styles.logoutButton}
+        onPress={handleLogout}
+      >
+        <Text style={styles.logoutButtonText}>Log Out Session</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -254,5 +269,28 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: theme.colors.muted,
     marginTop: 2,
+  },
+
+  logoutButton: {
+    backgroundColor: "#ffffff",
+    borderRadius: 20,
+    padding: 16,
+    marginTop: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#fca5a5",
+
+    shadowColor: "#000",
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+
+  logoutButtonText: {
+    color: "#ef4444",
+    fontSize: 15,
+    fontWeight: "700",
   },
 });
