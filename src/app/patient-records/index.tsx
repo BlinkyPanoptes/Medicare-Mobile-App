@@ -1,5 +1,5 @@
-import { router } from "expo-router";
-import { useState } from "react";
+import { fetchPatients, createPatient, updatePatient, deletePatient } from "@/api/patient";
+import { useState, useEffect } from "react";
 import {
   Alert,
   Platform,
@@ -10,9 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-// 1. Import the Native DateTimePicker component
 import DateTimePicker from "@react-native-community/datetimepicker";
-
 import { useAuth } from "@/components/context/auth-context";
 
 type PatientRecord = {
@@ -28,60 +26,70 @@ type PatientRecord = {
 export default function PatientRecordsScreen() {
   const { user } = useAuth();
 
-  // Management & UI View Control States
   const [isCreating, setIsCreating] = useState(false);
   const [editingPatientId, setEditingPatientId] = useState<string | null>(null);
+  const [patientDatabase, setPatientDatabase] = useState<PatientRecord[]>([]);
 
-  // Form Inputs State Management
+  // Form Inputs
   const [lastName, setLastName] = useState("");
   const [firstName, setFirstName] = useState("");
   const [gender, setGender] = useState<"Male" | "Female">("Female");
-  const [birthdate, setBirthdate] = useState(""); 
+  const [birthdate, setBirthdate] = useState("");
   const [email, setEmail] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // 2. Added states for managing calendar visibility and date reference object
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [dateValue, setDateValue] = useState(new Date());
 
-  // Local Hardcoded Mock Database Array State
-  const [patientDatabase, setPatientDatabase] = useState<PatientRecord[]>([
-    {
-      id: "1",
-      lastName: "Soratorio",
-      firstName: "Agnes",
-      gender: "Female",
-      birthdate: "January 25, 1954",
-      email: "agnes.soratorio@example.com",
-      mobileNumber: "9171234567",
-    },
-  ]);
+  // --- DATA LOADING ---
 
-  // Open Form Sheet for Creating a Brand New Patient
+  const loadPatients = async () => {
+    try {
+      const response = await fetchPatients();
+      const apiData = response.data.data || [];
+      const formattedData = apiData.map((p: any) => ({
+        id: p.id.toString(),
+        lastName: p.last_name,
+        firstName: p.first_name,
+        gender: p.gender,
+        birthdate: p.birthdate,
+        email: p.email ?? "",
+        mobileNumber: p.phone_number ?? "",
+      }));
+      setPatientDatabase(formattedData);
+    } catch (error) {
+      console.error("Error fetching patients:", error);
+      Alert.alert("Network Error", "Could not load patients. Check your connection.");
+    }
+  };
+
+  useEffect(() => {
+    loadPatients();
+  }, []);
+
+  // --- FORM HELPERS ---
+
   const openCreateForm = () => {
     setLastName("");
     setFirstName("");
     setGender("Female");
     setBirthdate("");
-    setDateValue(new Date()); // Reset date object
+    setDateValue(new Date());
     setEmail("");
     setMobileNumber("");
     setEditingPatientId(null);
     setIsCreating(true);
   };
 
-  // Open Form Sheet pre-populated with Selected Patient Data for Updates
   const openEditForm = (patient: PatientRecord) => {
     setLastName(patient.lastName);
     setFirstName(patient.firstName);
     setGender(patient.gender);
     setBirthdate(patient.birthdate);
-    
-    // Attempt to parse existing string date back into Date object if valid
+    setEmail(patient.email);
+    setMobileNumber(patient.mobileNumber);
     const parsedDate = Date.parse(patient.birthdate);
     setDateValue(!isNaN(parsedDate) ? new Date(parsedDate) : new Date());
-    
     setEditingPatientId(patient.id);
     setIsCreating(true);
   };
@@ -91,27 +99,17 @@ export default function PatientRecordsScreen() {
     if (field === "firstName") setFirstName("");
   };
 
-  // 3. Date picker change handler logic
   const onDateChange = (event: any, selectedDate?: Date) => {
-    // For Android, selecting a date or closing the dialog turns off visibility
-    if (Platform.OS === "android") {
-      setShowDatePicker(false);
-    }
-
+    if (Platform.OS === "android") setShowDatePicker(false);
     if (selectedDate) {
       setDateValue(selectedDate);
-      
-      // Format options to match your exact format: "January 25, 1954"
-      const formatted = selectedDate.toLocaleDateString("en-US", {
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-      });
-      setBirthdate(formatted);
+      // Send YYYY-MM-DD to Laravel (matches 'date' validation rule)
+      setBirthdate(selectedDate.toISOString().split("T")[0]);
     }
   };
 
-  // Save Actions: Handles both Creating and Updating Records
+  // --- CRUD ACTIONS ---
+
   const handleSaveSubmit = async () => {
     if (!lastName.trim() || !firstName.trim() || !birthdate.trim()) {
       Alert.alert("Missing Fields", "Please complete the patient's name and birthdate.");
@@ -120,47 +118,40 @@ export default function PatientRecordsScreen() {
 
     setIsSubmitting(true);
 
+    const payload = {
+      last_name: lastName,
+      first_name: firstName,
+      gender,
+      birthdate,
+      email,
+      phone_number: mobileNumber,
+    };
+
     try {
       if (editingPatientId) {
-        setPatientDatabase((prev) =>
-          prev.map((item) =>
-            item.id === editingPatientId
-              ? { ...item, lastName, firstName, gender, birthdate, email, mobileNumber }
-              : item
-          )
-        );
-        
-        Alert.alert(
-          "Success", 
-          `Patient data for ${firstName} ${lastName} has been modified successfully.`,
-          [{ text: "OK", onPress: () => setIsCreating(false) }]
-        );
+        await updatePatient(editingPatientId, payload);
+        Alert.alert("Success", `Patient data for ${firstName} ${lastName} has been updated.`, [
+          { text: "OK", onPress: () => setIsCreating(false) },
+        ]);
       } else {
-        const newPatient: PatientRecord = {
-          id: Date.now().toString(),
-          lastName,
-          firstName,
-          gender,
-          birthdate,
-          email,
-          mobileNumber,
-        };
-        setPatientDatabase((prev) => [...prev, newPatient]);
-        
-        Alert.alert(
-          "Patient Added", 
-          `Record saved for ${firstName} ${lastName} in the directory.`,
-          [{ text: "OK", onPress: () => setIsCreating(false) }]
-        );
+        await createPatient(payload);
+        Alert.alert("Patient Added", `Record saved for ${firstName} ${lastName}.`, [
+          { text: "OK", onPress: () => setIsCreating(false) },
+        ]);
       }
+      await loadPatients();
     } catch (err: any) {
-      Alert.alert("Submission Error", "Could not process form database schema parameters.");
+      // Surface the actual Laravel validation error if available
+      const serverMessage =
+        err?.response?.data?.message ||
+        Object.values(err?.response?.data?.errors ?? {})?.[0]?.[0] ||
+        "Failed to communicate with the server.";
+      Alert.alert("Submission Error", serverMessage);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // DELETE Handling Logic Action Process
   const handleDeletePatient = (id: string, name: string) => {
     Alert.alert(
       "Delete Patient",
@@ -170,15 +161,21 @@ export default function PatientRecordsScreen() {
         {
           text: "Delete",
           style: "destructive",
-          onPress: () => {
-            setPatientDatabase((prev) => prev.filter((p) => p.id !== id));
+          onPress: async () => {
+            try {
+              await deletePatient(id);
+              await loadPatients();
+            } catch (err) {
+              Alert.alert("Error", "Could not delete patient. Please try again.");
+            }
           },
         },
       ]
     );
   };
 
-  // --- VIEW RENDER 1: Patient Management Dashboard List View ---
+  // --- VIEW RENDER 1: Patient List ---
+
   if (!isCreating) {
     return (
       <View style={styles.container}>
@@ -203,17 +200,25 @@ export default function PatientRecordsScreen() {
                     {patient.gender} • DOB: {patient.birthdate}
                   </Text>
                   {patient.mobileNumber ? (
-                    <Text style={styles.cardSubDetails}>📞 +63 {patient.mobileNumber}</Text>
+                    <Text style={styles.cardSubDetails}>📱 +63 {patient.mobileNumber}</Text>
                   ) : null}
                 </View>
 
                 <View style={styles.cardActionsGroup}>
-                  <TouchableOpacity style={styles.editButton} onPress={() => openEditForm(patient)}>
+                  <TouchableOpacity
+                    style={styles.editButton}
+                    onPress={() => openEditForm(patient)}
+                  >
                     <Text style={styles.editButtonText}>Edit</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.deleteButton}
-                    onPress={() => handleDeletePatient(patient.id, `${patient.firstName} ${patient.lastName}`)}
+                    onPress={() =>
+                      handleDeletePatient(
+                        patient.id,
+                        `${patient.firstName} ${patient.lastName}`
+                      )
+                    }
                   >
                     <Text style={styles.deleteButtonText}>Delete</Text>
                   </TouchableOpacity>
@@ -226,18 +231,18 @@ export default function PatientRecordsScreen() {
     );
   }
 
-  // --- VIEW RENDER 2: Create or Edit Dynamic Form Fields View ---
+  // --- VIEW RENDER 2: Create / Edit Form ---
+
   return (
     <View style={styles.container}>
-
-      <ScrollView 
-        style={styles.scroller} 
+      <ScrollView
+        style={styles.scroller}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.promptHeadline}>Input the details of your patient</Text>
 
-        {/* LAST NAME INPUT */}
+        {/* LAST NAME */}
         <View style={styles.fieldWrapper}>
           <Text style={styles.fieldLabelText}>Last Name</Text>
           <View style={styles.inputContainerRow}>
@@ -249,14 +254,17 @@ export default function PatientRecordsScreen() {
               placeholderTextColor="#94a3b8"
             />
             {lastName.length > 0 && (
-              <TouchableOpacity onPress={() => handleClearField("lastName")} style={styles.clearBtnClick}>
+              <TouchableOpacity
+                onPress={() => handleClearField("lastName")}
+                style={styles.clearBtnClick}
+              >
                 <Text style={styles.clearBtnSymbol}>×</Text>
               </TouchableOpacity>
             )}
           </View>
         </View>
 
-        {/* FIRST NAME INPUT */}
+        {/* FIRST NAME */}
         <View style={styles.fieldWrapper}>
           <Text style={styles.fieldLabelText}>First Name</Text>
           <View style={styles.inputContainerRow}>
@@ -268,19 +276,22 @@ export default function PatientRecordsScreen() {
               placeholderTextColor="#94a3b8"
             />
             {firstName.length > 0 && (
-              <TouchableOpacity onPress={() => handleClearField("firstName")} style={styles.clearBtnClick}>
+              <TouchableOpacity
+                onPress={() => handleClearField("firstName")}
+                style={styles.clearBtnClick}
+              >
                 <Text style={styles.clearBtnSymbol}>×</Text>
               </TouchableOpacity>
             )}
           </View>
         </View>
 
-        {/* GENDER DYNAMIC RADIO CONTROLS */}
+        {/* GENDER */}
         <View style={styles.fieldWrapper}>
           <Text style={styles.fieldLabelText}>Gender</Text>
           <View style={styles.radioFlexContainer}>
-            <TouchableOpacity 
-              style={styles.radioButtonOption} 
+            <TouchableOpacity
+              style={styles.radioButtonOption}
               onPress={() => setGender("Male")}
               activeOpacity={0.8}
             >
@@ -290,12 +301,14 @@ export default function PatientRecordsScreen() {
               <Text style={styles.radioOptionLabelText}>Male</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={styles.radioButtonOption} 
+            <TouchableOpacity
+              style={styles.radioButtonOption}
               onPress={() => setGender("Female")}
               activeOpacity={0.8}
             >
-              <View style={[styles.outerRadioRing, gender === "Female" && styles.activeOuterRing]}>
+              <View
+                style={[styles.outerRadioRing, gender === "Female" && styles.activeOuterRing]}
+              >
                 {gender === "Female" && <View style={styles.innerRadioDot} />}
               </View>
               <Text style={styles.radioOptionLabelText}>Female</Text>
@@ -303,11 +316,11 @@ export default function PatientRecordsScreen() {
           </View>
         </View>
 
-        {/* BIRTHDATE INPUT CONTAINER (CHANGED TO INTERACTIVE BUTTON TIER) */}
+        {/* BIRTHDATE */}
         <View style={styles.fieldWrapper}>
           <Text style={styles.fieldLabelText}>Birthdate</Text>
-          <TouchableOpacity 
-            style={styles.inputContainerRow} 
+          <TouchableOpacity
+            style={styles.inputContainerRow}
             onPress={() => setShowDatePicker(true)}
             activeOpacity={0.7}
           >
@@ -316,25 +329,24 @@ export default function PatientRecordsScreen() {
               value={birthdate}
               placeholder="Select patient birthdate"
               placeholderTextColor="#94a3b8"
-              editable={false} // Prevents keyboard layout from opening manually
-              pointerEvents="none" // Forces touch to bubble straight to the parent opacity wrapper
+              editable={false}
+              pointerEvents="none"
             />
             <Text style={styles.calendarInlineIcon}>📅</Text>
           </TouchableOpacity>
         </View>
 
-        {/* 4. Conditionally injected standard platform datetime picker layer */}
         {showDatePicker && (
           <DateTimePicker
             value={dateValue}
             mode="date"
             display={Platform.OS === "ios" ? "spinner" : "default"}
             onChange={onDateChange}
-            maximumDate={new Date()} // Restricts doctors from selecting future dates
+            maximumDate={new Date()}
           />
         )}
 
-        {/* EMAIL ADDRESS INPUT */}
+        {/* EMAIL */}
         <View style={styles.fieldWrapper}>
           <Text style={styles.fieldLabelText}>Patient's Email Address</Text>
           <View style={styles.inputContainerRow}>
@@ -350,7 +362,7 @@ export default function PatientRecordsScreen() {
           </View>
         </View>
 
-        {/* MOBILE NUMBER INPUT */}
+        {/* MOBILE NUMBER */}
         <View style={styles.fieldWrapper}>
           <Text style={styles.fieldLabelText}>Mobile Number</Text>
           <View style={styles.phoneInputLayoutGroup}>
@@ -368,7 +380,7 @@ export default function PatientRecordsScreen() {
           </View>
         </View>
 
-        {/* INFORMATIONAL INFO SHEET BOX */}
+        {/* INFO BOX */}
         <View style={styles.infoAlertContainerBox}>
           <Text style={styles.infoBadgeIndicatorIcon}>ⓘ</Text>
           <View style={styles.infoAlertContentBodyTextGroup}>
@@ -376,13 +388,14 @@ export default function PatientRecordsScreen() {
               We will send a copy of the prescription to your patient's email or mobile number.
             </Text>
             <Text style={styles.infoAlertSubtextInline}>
-              If email or mobile number is not available, you may still continue to create a prescription and send it using other sharing options.
+              If email or mobile number is not available, you may still continue to create a
+              prescription and send it using other sharing options.
             </Text>
           </View>
         </View>
       </ScrollView>
 
-      {/* SUBMIT BUTTON */}
+      {/* SAVE BUTTON */}
       <View style={styles.bottomActionBarWrapper}>
         <TouchableOpacity
           style={[styles.nextActionButtonCall, isSubmitting && { backgroundColor: "#82b27a" }]}
@@ -400,76 +413,24 @@ export default function PatientRecordsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#ffffff",
-  },
-  navbarContainer: {
-    flexDirection: "row",
-    height: 60,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    marginTop: 10,
-  },
-  navActionArea: {
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-    justifyContent: "center",
-  },
-  backArrowText: {
-    fontSize: 24,
-    color: "#095c29", 
-    fontWeight: "500",
-  },
-  navbarTitle: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: "#374151",
-  },
-  cancelActionText: {
-    fontSize: 15,
-    color: "#f87171",
-    fontWeight: "500",
-  },
-  scroller: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 22,
-    paddingBottom: 40,
-  },
+  container: { flex: 1, backgroundColor: "#ffffff" },
+  scroller: { flex: 1 },
+  content: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 40 },
   listHeaderRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 25,
   },
-  promptHeadline: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#1e293b",
-  },
+  promptHeadline: { fontSize: 20, fontWeight: "700", color: "#1e293b" },
   addPatientBtn: {
     backgroundColor: "#095c29",
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 8,
   },
-  addPatientBtnText: {
-    color: "#fff",
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  emptyText: {
-    textAlign: "center",
-    color: "#64748b",
-    marginTop: 40,
-    fontSize: 15,
-  },
+  addPatientBtnText: { color: "#fff", fontWeight: "600", fontSize: 14 },
+  emptyText: { textAlign: "center", color: "#64748b", marginTop: 40, fontSize: 15 },
   patientCard: {
     backgroundColor: "#f8fafc",
     borderWidth: 1,
@@ -481,55 +442,26 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  cardInfoGroup: {
-    flex: 1,
-    gap: 4,
-  },
-  cardNameText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#0f172a",
-  },
-  cardSubDetails: {
-    fontSize: 14,
-    color: "#64748b",
-  },
-  cardActionsGroup: {
-    flexDirection: "row",
-    gap: 12,
-    alignItems: "center",
-  },
+  cardInfoGroup: { flex: 1, gap: 4 },
+  cardNameText: { fontSize: 16, fontWeight: "700", color: "#0f172a" },
+  cardSubDetails: { fontSize: 14, color: "#64748b" },
+  cardActionsGroup: { flexDirection: "row", gap: 8, marginLeft: 12, alignItems: "center" },
   editButton: {
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 6,
     backgroundColor: "#e2e8f0",
   },
-  editButtonText: {
-    color: "#334155",
-    fontWeight: "600",
-    fontSize: 13,
-  },
+  editButtonText: { color: "#334155", fontWeight: "600", fontSize: 13 },
   deleteButton: {
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 6,
     backgroundColor: "#fee2e2",
   },
-  deleteButtonText: {
-    color: "#ef4444",
-    fontWeight: "600",
-    fontSize: 13,
-  },
-  fieldWrapper: {
-    marginBottom: 20,
-  },
-  fieldLabelText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#475569",
-    marginBottom: 8,
-  },
+  deleteButtonText: { color: "#ef4444", fontWeight: "600", fontSize: 13 },
+  fieldWrapper: { marginBottom: 20 },
+  fieldLabelText: { fontSize: 15, fontWeight: "600", color: "#475569", marginBottom: 8 },
   inputContainerRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -540,36 +472,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     height: 52,
   },
-  fieldInput: {
-    flex: 1,
-    fontSize: 16,
-    color: "#0f172a",
-    height: "100%",
-  },
-  clearBtnClick: {
-    padding: 4,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  clearBtnSymbol: {
-    fontSize: 20,
-    color: "#94a3b8",
-  },
-  calendarInlineIcon: {
-    fontSize: 18,
-    color: "#94a3b8",
-  },
+  fieldInput: { flex: 1, fontSize: 16, color: "#0f172a", height: "100%" },
+  clearBtnClick: { padding: 4, justifyContent: "center", alignItems: "center" },
+  clearBtnSymbol: { fontSize: 20, color: "#94a3b8" },
+  calendarInlineIcon: { fontSize: 18, color: "#94a3b8" },
   radioFlexContainer: {
     flexDirection: "row",
     alignItems: "center",
     gap: 28,
     paddingVertical: 4,
   },
-  radioButtonOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
+  radioButtonOption: { flexDirection: "row", alignItems: "center", gap: 8 },
   outerRadioRing: {
     width: 22,
     height: 22,
@@ -580,25 +493,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#ffffff",
   },
-  activeOuterRing: {
-    borderColor: "#095c29",
-  },
-  innerRadioDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: "#095c29",
-  },
-  radioOptionLabelText: {
-    fontSize: 16,
-    color: "#334155",
-    fontWeight: "500",
-  },
-  phoneInputLayoutGroup: {
-    flexDirection: "row",
-    alignItems: "center",
-    height: 52,
-  },
+  activeOuterRing: { borderColor: "#095c29" },
+  innerRadioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#095c29" },
+  radioOptionLabelText: { fontSize: 16, color: "#334155", fontWeight: "500" },
+  phoneInputLayoutGroup: { flexDirection: "row", alignItems: "center", height: 52 },
   countryCodeBadgePlate: {
     width: 65,
     height: "100%",
@@ -611,11 +509,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  countryCodeBadgeLabel: {
-    fontSize: 16,
-    color: "#334155",
-    fontWeight: "500",
-  },
+  countryCodeBadgeLabel: { fontSize: 16, color: "#334155", fontWeight: "500" },
   phoneNumberNativeInput: {
     backgroundColor: "#f8fafc",
     borderWidth: 1,
@@ -634,32 +528,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#dcfce7",
   },
-  infoBadgeIndicatorIcon: {
-    fontSize: 18,
-    color: "#095c29",
-    fontWeight: "bold",
-    marginTop: 1,
-  },
-  infoAlertContentBodyTextGroup: {
-    flex: 1,
-    gap: 8,
-  },
+  infoBadgeIndicatorIcon: { fontSize: 18, color: "#095c29", fontWeight: "bold", marginTop: 1 },
+  infoAlertContentBodyTextGroup: { flex: 1, gap: 8 },
   infoAlertMessageTextInline: {
     fontSize: 14,
     color: "#166534",
     lineHeight: 20,
     fontWeight: "500",
   },
-  infoAlertSubtextInline: {
-    fontSize: 13,
-    color: "#3f6212",
-    lineHeight: 18,
-  },
+  infoAlertSubtextInline: { fontSize: 13, color: "#3f6212", lineHeight: 18 },
   bottomActionBarWrapper: {
     paddingHorizontal: 20,
     paddingBottom: 24,
     paddingTop: 12,
     backgroundColor: "#ffffff",
+    borderTopWidth: 1,
+    borderTopColor: "#f1f5f9",
   },
   nextActionButtonCall: {
     backgroundColor: "#095c29",
