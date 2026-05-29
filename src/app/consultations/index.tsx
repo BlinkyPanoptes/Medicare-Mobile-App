@@ -10,6 +10,7 @@ import {
 type PrescriptionButton = {
   label: string;
   icon: string;
+  description: string;
   onPress: () => void;
 };
 
@@ -17,21 +18,25 @@ const buttons: PrescriptionButton[] = [
   {
     label: "New Prescription",
     icon: "📝",
+    description: "Create a new medication order",
     onPress: () => router.push("/consultations/newPrescription"),
   },
   {
     label: "Represcribe",
     icon: "🔄",
+    description: "Reissue a previous prescription",
     onPress: () => {},
   },
   {
     label: "Templates",
     icon: "📄",
+    description: "Use or manage prescription templates",
     onPress: () => {},
   },
   {
     label: "Formulary",
     icon: "📖",
+    description: "View approved medications list",
     onPress: () => {},
   },
 ];
@@ -54,7 +59,7 @@ export default function CreatePrescriptionScreen() {
               <Text style={styles.icon}>{btn.icon}</Text>
             </View>
             <Text style={styles.cardText}>{btn.label}</Text>
-            <Text style={styles.cardSubtext}>Open Module</Text>
+            <Text style={styles.cardSubtext}>{btn.description}</Text>
           </TouchableOpacity>
         ))}
       </View>
