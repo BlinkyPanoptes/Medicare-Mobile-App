@@ -1,4 +1,3 @@
-import { router } from "expo-router";
 import { useState } from "react";
 import {
   Alert,
@@ -10,7 +9,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-// 1. Import the Native DateTimePicker component
 import DateTimePicker from "@react-native-community/datetimepicker";
 
 import { useAuth } from "@/components/context/auth-context";
@@ -36,16 +34,16 @@ export default function PatientRecordsScreen() {
   const [lastName, setLastName] = useState("");
   const [firstName, setFirstName] = useState("");
   const [gender, setGender] = useState<"Male" | "Female">("Female");
-  const [birthdate, setBirthdate] = useState(""); 
+  const [birthdate, setBirthdate] = useState("");
   const [email, setEmail] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 2. Added states for managing calendar visibility and date reference object
+  // Date picker states
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [dateValue, setDateValue] = useState(new Date());
 
-  // Local Hardcoded Mock Database Array State
+  // Local Mock Database
   const [patientDatabase, setPatientDatabase] = useState<PatientRecord[]>([
     {
       id: "1",
@@ -58,30 +56,29 @@ export default function PatientRecordsScreen() {
     },
   ]);
 
-  // Open Form Sheet for Creating a Brand New Patient
+  // --- FORM HELPERS ---
+
   const openCreateForm = () => {
     setLastName("");
     setFirstName("");
     setGender("Female");
     setBirthdate("");
-    setDateValue(new Date()); // Reset date object
+    setDateValue(new Date());
     setEmail("");
     setMobileNumber("");
     setEditingPatientId(null);
     setIsCreating(true);
   };
 
-  // Open Form Sheet pre-populated with Selected Patient Data for Updates
   const openEditForm = (patient: PatientRecord) => {
     setLastName(patient.lastName);
     setFirstName(patient.firstName);
     setGender(patient.gender);
     setBirthdate(patient.birthdate);
-    
-    // Attempt to parse existing string date back into Date object if valid
+    setEmail(patient.email);
+    setMobileNumber(patient.mobileNumber);
     const parsedDate = Date.parse(patient.birthdate);
     setDateValue(!isNaN(parsedDate) ? new Date(parsedDate) : new Date());
-    
     setEditingPatientId(patient.id);
     setIsCreating(true);
   };
@@ -91,27 +88,22 @@ export default function PatientRecordsScreen() {
     if (field === "firstName") setFirstName("");
   };
 
-  // 3. Date picker change handler logic
   const onDateChange = (event: any, selectedDate?: Date) => {
-    // For Android, selecting a date or closing the dialog turns off visibility
-    if (Platform.OS === "android") {
-      setShowDatePicker(false);
-    }
-
+    if (Platform.OS === "android") setShowDatePicker(false);
     if (selectedDate) {
       setDateValue(selectedDate);
-      
-      // Format options to match your exact format: "January 25, 1954"
-      const formatted = selectedDate.toLocaleDateString("en-US", {
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-      });
-      setBirthdate(formatted);
+      setBirthdate(
+        selectedDate.toLocaleDateString("en-US", {
+          month: "long",
+          day: "numeric",
+          year: "numeric",
+        })
+      );
     }
   };
 
-  // Save Actions: Handles both Creating and Updating Records
+  // --- CRUD ACTIONS ---
+
   const handleSaveSubmit = async () => {
     if (!lastName.trim() || !firstName.trim() || !birthdate.trim()) {
       Alert.alert("Missing Fields", "Please complete the patient's name and birthdate.");
@@ -129,9 +121,8 @@ export default function PatientRecordsScreen() {
               : item
           )
         );
-        
         Alert.alert(
-          "Success", 
+          "Success",
           `Patient data for ${firstName} ${lastName} has been modified successfully.`,
           [{ text: "OK", onPress: () => setIsCreating(false) }]
         );
@@ -146,9 +137,8 @@ export default function PatientRecordsScreen() {
           mobileNumber,
         };
         setPatientDatabase((prev) => [...prev, newPatient]);
-        
         Alert.alert(
-          "Patient Added", 
+          "Patient Added",
           `Record saved for ${firstName} ${lastName} in the directory.`,
           [{ text: "OK", onPress: () => setIsCreating(false) }]
         );
@@ -160,7 +150,6 @@ export default function PatientRecordsScreen() {
     }
   };
 
-  // DELETE Handling Logic Action Process
   const handleDeletePatient = (id: string, name: string) => {
     Alert.alert(
       "Delete Patient",
@@ -170,15 +159,13 @@ export default function PatientRecordsScreen() {
         {
           text: "Delete",
           style: "destructive",
-          onPress: () => {
-            setPatientDatabase((prev) => prev.filter((p) => p.id !== id));
-          },
+          onPress: () => setPatientDatabase((prev) => prev.filter((p) => p.id !== id)),
         },
       ]
     );
   };
 
-  // --- VIEW RENDER 1: Patient Management Dashboard List View ---
+  // --- VIEW RENDER 1: Patient List ---
   if (!isCreating) {
     return (
       <View style={styles.container}>
@@ -208,12 +195,20 @@ export default function PatientRecordsScreen() {
                 </View>
 
                 <View style={styles.cardActionsGroup}>
-                  <TouchableOpacity style={styles.editButton} onPress={() => openEditForm(patient)}>
+                  <TouchableOpacity
+                    style={styles.editButton}
+                    onPress={() => openEditForm(patient)}
+                  >
                     <Text style={styles.editButtonText}>Edit</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.deleteButton}
-                    onPress={() => handleDeletePatient(patient.id, `${patient.firstName} ${patient.lastName}`)}
+                    onPress={() =>
+                      handleDeletePatient(
+                        patient.id,
+                        `${patient.firstName} ${patient.lastName}`
+                      )
+                    }
                   >
                     <Text style={styles.deleteButtonText}>Delete</Text>
                   </TouchableOpacity>
@@ -226,18 +221,17 @@ export default function PatientRecordsScreen() {
     );
   }
 
-  // --- VIEW RENDER 2: Create or Edit Dynamic Form Fields View ---
+  // --- VIEW RENDER 2: Create / Edit Form ---
   return (
     <View style={styles.container}>
-
-      <ScrollView 
-        style={styles.scroller} 
+      <ScrollView
+        style={styles.scroller}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.promptHeadline}>Input the details of your patient</Text>
 
-        {/* LAST NAME INPUT */}
+        {/* LAST NAME */}
         <View style={styles.fieldWrapper}>
           <Text style={styles.fieldLabelText}>Last Name</Text>
           <View style={styles.inputContainerRow}>
@@ -249,14 +243,17 @@ export default function PatientRecordsScreen() {
               placeholderTextColor="#94a3b8"
             />
             {lastName.length > 0 && (
-              <TouchableOpacity onPress={() => handleClearField("lastName")} style={styles.clearBtnClick}>
+              <TouchableOpacity
+                onPress={() => handleClearField("lastName")}
+                style={styles.clearBtnClick}
+              >
                 <Text style={styles.clearBtnSymbol}>×</Text>
               </TouchableOpacity>
             )}
           </View>
         </View>
 
-        {/* FIRST NAME INPUT */}
+        {/* FIRST NAME */}
         <View style={styles.fieldWrapper}>
           <Text style={styles.fieldLabelText}>First Name</Text>
           <View style={styles.inputContainerRow}>
@@ -268,19 +265,22 @@ export default function PatientRecordsScreen() {
               placeholderTextColor="#94a3b8"
             />
             {firstName.length > 0 && (
-              <TouchableOpacity onPress={() => handleClearField("firstName")} style={styles.clearBtnClick}>
+              <TouchableOpacity
+                onPress={() => handleClearField("firstName")}
+                style={styles.clearBtnClick}
+              >
                 <Text style={styles.clearBtnSymbol}>×</Text>
               </TouchableOpacity>
             )}
           </View>
         </View>
 
-        {/* GENDER DYNAMIC RADIO CONTROLS */}
+        {/* GENDER */}
         <View style={styles.fieldWrapper}>
           <Text style={styles.fieldLabelText}>Gender</Text>
           <View style={styles.radioFlexContainer}>
-            <TouchableOpacity 
-              style={styles.radioButtonOption} 
+            <TouchableOpacity
+              style={styles.radioButtonOption}
               onPress={() => setGender("Male")}
               activeOpacity={0.8}
             >
@@ -290,12 +290,14 @@ export default function PatientRecordsScreen() {
               <Text style={styles.radioOptionLabelText}>Male</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={styles.radioButtonOption} 
+            <TouchableOpacity
+              style={styles.radioButtonOption}
               onPress={() => setGender("Female")}
               activeOpacity={0.8}
             >
-              <View style={[styles.outerRadioRing, gender === "Female" && styles.activeOuterRing]}>
+              <View
+                style={[styles.outerRadioRing, gender === "Female" && styles.activeOuterRing]}
+              >
                 {gender === "Female" && <View style={styles.innerRadioDot} />}
               </View>
               <Text style={styles.radioOptionLabelText}>Female</Text>
@@ -303,11 +305,11 @@ export default function PatientRecordsScreen() {
           </View>
         </View>
 
-        {/* BIRTHDATE INPUT CONTAINER (CHANGED TO INTERACTIVE BUTTON TIER) */}
+        {/* BIRTHDATE */}
         <View style={styles.fieldWrapper}>
           <Text style={styles.fieldLabelText}>Birthdate</Text>
-          <TouchableOpacity 
-            style={styles.inputContainerRow} 
+          <TouchableOpacity
+            style={styles.inputContainerRow}
             onPress={() => setShowDatePicker(true)}
             activeOpacity={0.7}
           >
@@ -316,25 +318,24 @@ export default function PatientRecordsScreen() {
               value={birthdate}
               placeholder="Select patient birthdate"
               placeholderTextColor="#94a3b8"
-              editable={false} // Prevents keyboard layout from opening manually
-              pointerEvents="none" // Forces touch to bubble straight to the parent opacity wrapper
+              editable={false}
+              pointerEvents="none"
             />
             <Text style={styles.calendarInlineIcon}>📅</Text>
           </TouchableOpacity>
         </View>
 
-        {/* 4. Conditionally injected standard platform datetime picker layer */}
         {showDatePicker && (
           <DateTimePicker
             value={dateValue}
             mode="date"
             display={Platform.OS === "ios" ? "spinner" : "default"}
             onChange={onDateChange}
-            maximumDate={new Date()} // Restricts doctors from selecting future dates
+            maximumDate={new Date()}
           />
         )}
 
-        {/* EMAIL ADDRESS INPUT */}
+        {/* EMAIL */}
         <View style={styles.fieldWrapper}>
           <Text style={styles.fieldLabelText}>Patient's Email Address</Text>
           <View style={styles.inputContainerRow}>
@@ -350,7 +351,7 @@ export default function PatientRecordsScreen() {
           </View>
         </View>
 
-        {/* MOBILE NUMBER INPUT */}
+        {/* MOBILE NUMBER */}
         <View style={styles.fieldWrapper}>
           <Text style={styles.fieldLabelText}>Mobile Number</Text>
           <View style={styles.phoneInputLayoutGroup}>
@@ -368,7 +369,7 @@ export default function PatientRecordsScreen() {
           </View>
         </View>
 
-        {/* INFORMATIONAL INFO SHEET BOX */}
+        {/* INFO BOX */}
         <View style={styles.infoAlertContainerBox}>
           <Text style={styles.infoBadgeIndicatorIcon}>ⓘ</Text>
           <View style={styles.infoAlertContentBodyTextGroup}>
@@ -376,13 +377,14 @@ export default function PatientRecordsScreen() {
               We will send a copy of the prescription to your patient's email or mobile number.
             </Text>
             <Text style={styles.infoAlertSubtextInline}>
-              If email or mobile number is not available, you may still continue to create a prescription and send it using other sharing options.
+              If email or mobile number is not available, you may still continue to create a
+              prescription and send it using other sharing options.
             </Text>
           </View>
         </View>
       </ScrollView>
 
-      {/* SUBMIT BUTTON */}
+      {/* SAVE BUTTON */}
       <View style={styles.bottomActionBarWrapper}>
         <TouchableOpacity
           style={[styles.nextActionButtonCall, isSubmitting && { backgroundColor: "#82b27a" }]}
@@ -403,36 +405,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#ffffff",
-  },
-  navbarContainer: {
-    flexDirection: "row",
-    height: 60,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    marginTop: 10,
-  },
-  navActionArea: {
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-    justifyContent: "center",
-  },
-  backArrowText: {
-    fontSize: 24,
-    color: "#095c29", 
-    fontWeight: "500",
-  },
-  navbarTitle: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: "#374151",
-  },
-  cancelActionText: {
-    fontSize: 15,
-    color: "#f87171",
-    fontWeight: "500",
   },
   scroller: {
     flex: 1,
@@ -496,7 +468,8 @@ const styles = StyleSheet.create({
   },
   cardActionsGroup: {
     flexDirection: "row",
-    gap: 12,
+    gap: 8,
+    marginLeft: 12,
     alignItems: "center",
   },
   editButton: {
@@ -660,6 +633,8 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     paddingTop: 12,
     backgroundColor: "#ffffff",
+    borderTopWidth: 1,
+    borderTopColor: "#f1f5f9",
   },
   nextActionButtonCall: {
     backgroundColor: "#095c29",

@@ -18,7 +18,8 @@ type ButtonRoute =
   | "/transactions"
   | "/brand-directory"
   | "/generics"
-  | "/diseases";
+  | "/diseases"
+  | "/medical-certificate";
 
 type ButtonItem = {
   label: string;
@@ -71,6 +72,13 @@ export default function Dashboard() {
       icon: "💳",
       description: "View previous consultations",
       allowedRoles: ["doctor", "assistant"],
+    },
+    {
+      label: "Medical Certificate",
+      route: "/medical-certificate",
+      icon: "📄",
+      description: "Generate verified medical clearance files",
+      allowedRoles: ["doctor"],
     },
   ];
 

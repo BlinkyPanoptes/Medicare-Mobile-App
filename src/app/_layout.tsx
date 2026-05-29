@@ -44,6 +44,7 @@ function RootStack() {
           ...headerStyles,
         }}
       />
+      
       <Stack.Screen
         name="consultations"
         options={{
@@ -51,6 +52,16 @@ function RootStack() {
           ...headerStyles,
         }}
       />
+
+      {/* ✅ Added: Register the nested script module route file layout */}
+      <Stack.Screen
+        name="consultations/newPrescription"
+        options={{
+          title: "New Prescription",
+          ...headerStyles,
+        }}
+      />
+
       <Stack.Screen
         name="transactions"
         options={{
@@ -58,6 +69,7 @@ function RootStack() {
           ...headerStyles,
         }}
       />
+
       <Stack.Screen
         name="brand-directory"
         options={{
@@ -65,6 +77,7 @@ function RootStack() {
           ...headerStyles,
         }}
       />
+
       <Stack.Screen
         name="generics"
         options={{
@@ -72,10 +85,20 @@ function RootStack() {
           ...headerStyles,
         }}
       />
+
       <Stack.Screen
         name="diseases"
         options={{
           title: "Diseases",
+          ...headerStyles,
+        }}
+      />
+
+      {/* ✅ Added: Registered the core medical-certificate layout configuration */}
+      <Stack.Screen
+        name="medical-certificate"
+        options={{
+          title: "Medical Certificate",
           ...headerStyles,
         }}
       />
