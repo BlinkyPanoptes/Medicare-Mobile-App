@@ -1,6 +1,9 @@
 import { router } from "expo-router";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
+  Alert,
+  Image,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -13,113 +16,117 @@ import { useAuth } from "@/components/context/auth-context";
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   
-  // 🔒 Throttling states
   const [failedAttempts, setFailedAttempts] = useState(0);
-  const [lockoutTimeLeft, setLockoutTimeLeft] = useState(0); // remaining seconds
+  const [lockoutTimeLeft, setLockoutTimeLeft] = useState(0); 
 
   const { login } = useAuth();
 
-  // Handle countdown timer decrement if user is locked out
   useEffect(() => {
     if (lockoutTimeLeft <= 0) return;
-
     const timer = setInterval(() => {
       setLockoutTimeLeft((prev) => prev - 1);
     }, 1000);
-
     return () => clearInterval(timer);
   }, [lockoutTimeLeft]);
 
-  // Format seconds into MM:SS for user visibility
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
   };
 
-  const handleLogin = () => {
-    // 1. Guard check if user is currently under cooldown
+  const handleLogin = async () => {
     if (lockoutTimeLeft > 0) {
-      alert(`Too many failed attempts. Please wait ${formatTime(lockoutTimeLeft)} before trying again.`);
+      Alert.alert("Locked Out", `Please wait ${formatTime(lockoutTimeLeft)} before trying again.`);
       return;
     }
 
-    const doctorEmail = "doctor@cravecare.com";
-    const doctorPassword = "12345678";
+    setIsLoading(true);
 
-    const assistantEmail = "assistant@cravecare.com";
-    const assistantPassword = "12345678";
-
-    const adminEmail = "admin@cravecare.com";
-    const adminPassword = "12345678";
-
-    const isDoctor = email === doctorEmail && password === doctorPassword;
-    const isAssistant = email === assistantEmail && password === assistantPassword;
-    const isAdmin = email === adminEmail && password === adminPassword;
-
-    if (isDoctor || isAssistant || isAdmin) {
-      // Success path: Reset tracking metrics
+    try {
+      await login(email, password);
       setFailedAttempts(0);
-      
-      if (isDoctor) {
-        login({ email, role: "doctor" });
-      } else if (isAssistant) {
-        login({ email, role: "assistant" });
-      } else if (isAdmin) {
-        login({ email, role: "admin" });
-      }
       router.replace("/dashboard");
-    } else {
-      // Failure path: Increment tracker increments
-      const nextAttempts = failedAttempts + 1;
-      setFailedAttempts(nextAttempts);
-
-      if (nextAttempts >= 5) {
-        setLockoutTimeLeft(180); // ⏱️ Lockout duration set to 3 minutes (180 seconds)
-        alert("Too many failed attempts. Login has been suspended for 3 minutes.");
+    } catch (error: any) {
+      if (error.response) {
+        console.log("SERVER REJECTED LOGIN:", error.response.data);
+        handleFailedAttempt();
       } else {
-        alert(`Invalid email or password. Try Again!`);
+        console.error("NETWORK ERROR:", error.message);
+        Alert.alert("Connection Error", "Ensure your server is running and reachable.");
       }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleFailedAttempt = () => {
+    const nextAttempts = failedAttempts + 1;
+    setFailedAttempts(nextAttempts);
+
+    if (nextAttempts >= 5) {
+      setLockoutTimeLeft(180); 
+      Alert.alert("Account Locked", "Too many failed attempts. Login has been suspended for 3 minutes.");
+    } else {
+      Alert.alert("Login Failed", "Invalid email or password. Try Again!");
     }
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>CraveCare{"\n"}E-Medical Record System</Text>
-      <Text style={styles.subtitle}>Login to continue</Text>
+      {/* Matches the top status bar overlay to your deep branding green */}
+      <StatusBar barStyle="light-content" backgroundColor="#095c29" />
 
-      <TextInput
-        placeholder="Email"
-        value={email}
-        onChangeText={setEmail}
-        style={styles.input}
-        autoCapitalize="none"
-        keyboardType="email-address"
-        editable={lockoutTimeLeft === 0} // Optional visual disabled cue during lock
-      />
+      {/* Top Section: Branding Green Banner Header */}
+      <View style={styles.headerBanner}>
+        <Image 
+          source={require("@/assets/images/CraveCare-Logo.png")} 
+          style={styles.logo}
+          resizeMode="contain"
+        />
+      </View>
 
-      <TextInput
-        placeholder="Password"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-        style={styles.input}
-        editable={lockoutTimeLeft === 0} // Optional visual disabled cue during lock
-      />
+      {/* Bottom Section: Light Sheet Container with Curved Corners */}
+      <View style={styles.formSheet}>
+        <Text style={styles.sheetTitle}>Login</Text>
+        <Text style={styles.sheetSubtitle}>Sign in to access your clinic workspace</Text>
 
-      <TouchableOpacity 
-        style={[
-          styles.button, 
-          lockoutTimeLeft > 0 && { backgroundColor: "#6b7280", opacity: 0.7 } // Muted gray style state for locking layout
-        ]} 
-        onPress={handleLogin}
-        disabled={lockoutTimeLeft > 0}
-      >
-        <Text style={styles.buttonText}>
-          {lockoutTimeLeft > 0 ? `Locked Out (${formatTime(lockoutTimeLeft)})` : "Login"}
-        </Text>
-      </TouchableOpacity>
+        <TextInput
+          placeholder="Email Address"
+          placeholderTextColor="#9ca3af"
+          value={email}
+          onChangeText={setEmail}
+          style={styles.input}
+          autoCapitalize="none"
+          keyboardType="email-address"
+          editable={lockoutTimeLeft === 0 && !isLoading} 
+        />
+
+        <TextInput
+          placeholder="Password"
+          placeholderTextColor="#9ca3af"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          style={styles.input}
+          editable={lockoutTimeLeft === 0 && !isLoading} 
+        />
+
+        <TouchableOpacity 
+          style={[
+            styles.button, 
+            (lockoutTimeLeft > 0 || isLoading) && { backgroundColor: "#6b7280", opacity: 0.7 }
+          ]} 
+          onPress={handleLogin}
+          disabled={lockoutTimeLeft > 0 || isLoading}
+        >
+          <Text style={styles.buttonText}>
+            {isLoading ? "Logging in..." : lockoutTimeLeft > 0 ? `Locked Out (${formatTime(lockoutTimeLeft)})` : "Login"}
+          </Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -127,37 +134,72 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#095c29", // Base background color matches image_1ad14c.png top banner
+  },
+  headerBanner: {
+    flex: 2, // Controls height proportion of the green banner section
     justifyContent: "center",
-    padding: 20,
-    backgroundColor: "#f5f7fb",
+    alignItems: "center",
+    paddingHorizontal: 30,
+    paddingTop: 40,
   },
-  title: {
-    fontSize: 24,
+  logo: {
+    width: "100%",
+    height: "90%",
+  },
+  formSheet: {
+    flex: 3, // Content section layout allocation
+    backgroundColor: "#f5f7fb", // Light container backplate color
+    borderTopLeftRadius: 40, // High-radius corner curves matching image_1ad14c.png
+    borderTopRightRadius: 40,
+    paddingHorizontal: 28,
+    paddingTop: 35,
+  },
+  sheetTitle: {
+    fontSize: 28,
     fontWeight: "bold",
-    textAlign: "center",
-    marginBottom: 10,
+    color: "#111827",
+    marginBottom: 6,
   },
-  subtitle: {
-    textAlign: "center",
+  sheetSubtitle: {
+    fontSize: 14,
+    color: "#6b7280",
     marginBottom: 30,
-    color: "#666",
   },
   input: {
-    backgroundColor: "#fff",
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 15,
+    backgroundColor: "#ffffff",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 14,
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#ddd",
+    borderColor: "#e5e7eb",
+    fontSize: 15,
+    color: "#111827",
+    
+    // Smooth subtle card elevations for iOS & Android
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   button: {
     backgroundColor: "#095c29",
-    padding: 15,
-    borderRadius: 10,
+    paddingVertical: 16,
+    borderRadius: 14,
     alignItems: "center",
+    marginTop: 10,
+    
+    shadowColor: "#095c29",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
   },
   buttonText: {
-    color: "#fff",
+    color: "#ffffff",
     fontWeight: "bold",
+    fontSize: 16,
   },
 });

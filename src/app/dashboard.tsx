@@ -1,14 +1,16 @@
+import { useAuth } from "@/components/context/auth-context";
+import { ButtonCard, Card } from "@/components/ui";
+import { theme } from "@/theme";
+import { UserRole } from "@/types/user";
 import { router } from "expo-router";
 import {
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
   useWindowDimensions,
+  View,
 } from "react-native";
-
-import { useAuth } from "@/components/context/auth-context";
 
 type ButtonRoute =
   | "/patient-records"
@@ -22,57 +24,96 @@ type ButtonItem = {
   label: string;
   route: ButtonRoute;
   icon: string;
+  description: string;
+  allowedRoles?: UserRole[];
 };
-
-type ButtonCardProps = ButtonItem;
 
 export default function Dashboard() {
   const { width } = useWindowDimensions();
-  const { logout } = useAuth();
+  
+  // Destructure both user data and logout function cleanly at once
+  const { user, logout } = useAuth();
 
   const handleLogout = () => {
     logout();
     router.replace("/login");
   };
 
-  // ✅ smarter responsive column system
+  // determines number of button columns based on screen width
   const getColumns = () => {
-    if (width >= 1024) return 4; // large tablets / desktop-like
-    if (width >= 768) return 3; // tablets
-    if (width >= 600) return 3; // phone landscape
-    return 2; // phone portrait
+    if (width >= 1024) return 4;
+    if (width >= 768) return 3;
+    if (width >= 600) return 3;
+    return 2;
   };
 
   const columns = getColumns();
-  const cardWidth = `${100 / columns - 2}%`;
+  const cardWidth = 100 / columns - 2;
 
   const clinicButtons: ButtonItem[] = [
-    { label: "Patient Records", route: "/patient-records", icon: "🩺" },
-    { label: "Consultations", route: "/consultations", icon: "📋" },
-    { label: "Transactions", route: "/transactions", icon: "💳" },
+    {
+      label: "Patient Records",
+      route: "/patient-records",
+      icon: "🩺",
+      description: "View and manage patient information",
+      allowedRoles: ["doctor", "assistant"],
+    },
+    {
+      label: "Consultations",
+      route: "/consultations",
+      icon: "📋",
+      description: "Manage prescriptions and medical certificates",
+      allowedRoles: ["doctor"],
+    },
+    {
+      label: "Transactions",
+      route: "/transactions",
+      icon: "💳",
+      description: "View previous consultations",
+      allowedRoles: ["doctor", "assistant"],
+    },
   ];
 
   const drugButtons: ButtonItem[] = [
-    { label: "Brand Directory", route: "/brand-directory", icon: "💊" },
-    { label: "Generics", route: "/generics", icon: "🧪" },
-    { label: "Diseases", route: "/diseases", icon: "🦠" },
+    {
+      label: "Brand Directory",
+      route: "/brand-directory",
+      icon: "💊",
+      description: "View and manage branded medications",
+      allowedRoles: ["doctor", "assistant"],
+    },
+    {
+      label: "Generics",
+      route: "/generics",
+      icon: "🧪",
+      description: "View and manage generic medications",
+      allowedRoles: ["doctor", "assistant"],
+    },
+    {
+      label: "Diseases",
+      route: "/diseases",
+      icon: "🦠",
+      description: "View and manage disease information",
+      allowedRoles: ["doctor", "assistant"],
+    },
   ];
 
-  const ButtonCard = ({ label, route, icon }: ButtonCardProps) => {
-    return (
-      <TouchableOpacity
-        activeOpacity={0.85}
-        style={[styles.card, { flexBasis: `${100 / columns - 2}%` }]}
-        onPress={() => router.push(route)}
-      >
-        <View style={styles.iconContainer}>
-          <Text style={styles.icon}>{icon}</Text>
-        </View>
+  // Filter buttons based on user role
+  const filterByRole = (btn: ButtonItem) => {
+    if (!btn.allowedRoles) return true; // if no roles specified, show to all
+    if (!user) return false; // if no user, hide role-specific buttons
+    return btn.allowedRoles.includes(btn.allowedRoles.includes(user.role) ? user.role : (user.role as any));
+  };
 
-        <Text style={styles.cardText}>{label}</Text>
-        <Text style={styles.cardSubtext}>Open Module</Text>
-      </TouchableOpacity>
-    );
+  const filteredClinicButtons = clinicButtons.filter(filterByRole);
+  const filteredDrugButtons = drugButtons.filter(filterByRole);
+
+  // Helper to display a clean avatar name placeholder depending on user role
+  const getAvatarText = () => {
+    if (!user) return "EMR";
+    if (user.role === "doctor") return "DOC";
+    if (user.role === "assistant") return "AST";
+    return "ADM";
   };
 
   return (
@@ -81,47 +122,68 @@ export default function Dashboard() {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
+      {/* HEADER */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.greeting}>Good Day 👋</Text>
+          <Text style={styles.greeting}>
+            Good Day, {user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'Staff' : 'Staff'} 👋
+          </Text>
           <Text style={styles.title}>Medical Dashboard</Text>
         </View>
 
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>DR</Text>
+          <Text style={styles.avatarText}>{getAvatarText()}</Text>
         </View>
       </View>
 
-      <View style={styles.welcomeCard}>
+      {/* WELCOME CARD */}
+      <Card style={styles.welcomeCard}>
         <Text style={styles.welcomeTitle}>Welcome to CraveCare EMR</Text>
         <Text style={styles.welcomeText}>
           Manage patients, consultations, transactions, and drug information in
           one organized workspace.
         </Text>
-      </View>
+      </Card>
 
+      {/* CLINIC */}
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Clinic Management</Text>
         <Text style={styles.sectionSubtitle}>Core operations</Text>
       </View>
 
       <View style={styles.grid}>
-        {clinicButtons.map((btn) => (
-          <ButtonCard key={btn.route} {...btn} />
+        {filteredClinicButtons.map((btn) => (
+          <ButtonCard
+            key={btn.route}
+            label={btn.label}
+            route={btn.route}
+            icon={btn.icon}
+            description={btn.description}
+            cardWidth={cardWidth}
+          />
         ))}
       </View>
 
+      {/* DRUGS */}
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Drug Information</Text>
         <Text style={styles.sectionSubtitle}>Medication references</Text>
       </View>
 
       <View style={styles.grid}>
-        {drugButtons.map((btn) => (
-          <ButtonCard key={btn.route} {...btn} />
+        {filteredDrugButtons.map((btn) => (
+          <ButtonCard
+            key={btn.route}
+            label={btn.label}
+            route={btn.route}
+            icon={btn.icon}
+            description={btn.description}
+            cardWidth={cardWidth}
+          />
         ))}
       </View>
       
+      {/* LOGOUT */}
       <TouchableOpacity
         activeOpacity={0.85}
         style={styles.logoutButton}
@@ -137,11 +199,11 @@ export default function Dashboard() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f4f7f5",
+    backgroundColor: theme.colors.background,
   },
   content: {
-    padding: 20,
-    paddingBottom: 40,
+    padding: theme.spacing.md,
+    paddingBottom: theme.spacing.lg,
   },
   header: {
     flexDirection: "row",
@@ -151,29 +213,29 @@ const styles = StyleSheet.create({
   },
   greeting: {
     fontSize: 14,
-    color: "#6b7280",
+    color: theme.colors.muted,
     marginBottom: 4,
   },
   title: {
     fontSize: 30,
     fontWeight: "bold",
-    color: "#123524",
+    color: theme.colors.text,
   },
   avatar: {
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: "#095c29",
+    backgroundColor: theme.colors.primary,
     justifyContent: "center",
     alignItems: "center",
   },
   avatarText: {
     color: "#fff",
     fontWeight: "bold",
-    fontSize: 16,
+    fontSize: 14,
   },
   welcomeCard: {
-    backgroundColor: "#095c29",
+    backgroundColor: theme.colors.primary,
     borderRadius: 22,
     padding: 22,
     marginBottom: 30,
@@ -185,22 +247,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   welcomeText: {
-    color: "#d8e8dd",
+    color: theme.colors.white,
     fontSize: 14,
     lineHeight: 22,
-  },
-  sectionHeader: {
-    marginBottom: 14,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#1f2937",
-  },
-  sectionSubtitle: {
-    fontSize: 13,
-    color: "#6b7280",
-    marginTop: 2,
   },
   grid: {
     flexDirection: "row",
@@ -208,40 +257,18 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 18,
   },
-  card: {
-    backgroundColor: "#ffffff",
-    borderRadius: 20,
-    paddingVertical: 22,
-    paddingHorizontal: 16,
-    marginBottom: 16,
-
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
+  sectionHeader: {
+    marginBottom: 14,
   },
-  iconContainer: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: "#eef6f1",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  icon: {
-    fontSize: 24,
-  },
-  cardText: {
-    fontSize: 15,
+  sectionTitle: {
+    fontSize: 20,
     fontWeight: "700",
-    color: "#1f2937",
-    marginBottom: 4,
+    color: theme.colors.text,
   },
-  cardSubtext: {
-    fontSize: 12,
-    color: "#6b7280",
+  sectionSubtitle: {
+    fontSize: 13,
+    color: theme.colors.muted,
+    marginTop: 2,
   },
   logoutButton: {
     backgroundColor: "#ffffff",
@@ -252,7 +279,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1,
     borderColor: "#fca5a5",
-
     shadowColor: "#000",
     shadowOpacity: 0.03,
     shadowRadius: 6,

@@ -23,8 +23,16 @@ function RootStack() {
         options={{
           // Safely updates title dynamically using only the email string
           title: user
-            ? `Welcome, ${user.role === "doctor" ? "Dr. " : ""}${user.email.split("@")[0]}`
+            ? `Welcome, ${user.role === "doctor" ? "Dr. " : ""}${user.first_name}`
             : "Welcome",
+          ...headerStyles,
+        }}
+      />
+
+      <Stack.Screen
+        name="admin-dashboard"
+        options={{
+          title: "Admin Control Panel",
           ...headerStyles,
         }}
       />
