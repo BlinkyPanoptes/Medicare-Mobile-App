@@ -1,14 +1,7 @@
+import { User } from "@/types/user";
 import axios from "axios";
 import * as SecureStore from "expo-secure-store";
 import React, { createContext, useContext, useEffect, useState } from "react";
-
-export interface User {
-  id: number;
-  email: string;
-  first_name: string;
-  last_name: string;
-  role: string;
-}
 
 interface AuthContextType {
   token: string | null;

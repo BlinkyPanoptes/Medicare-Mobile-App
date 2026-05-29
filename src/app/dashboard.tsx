@@ -31,7 +31,7 @@ type ButtonItem = {
 
 export default function Dashboard() {
   const { width } = useWindowDimensions();
-  
+
   // Destructure both user data and logout function cleanly at once
   const { user, logout } = useAuth();
 
@@ -110,7 +110,9 @@ export default function Dashboard() {
   const filterByRole = (btn: ButtonItem) => {
     if (!btn.allowedRoles) return true; // if no roles specified, show to all
     if (!user) return false; // if no user, hide role-specific buttons
-    return btn.allowedRoles.includes(btn.allowedRoles.includes(user.role) ? user.role : (user.role as any));
+    return btn.allowedRoles.includes(
+      btn.allowedRoles.includes(user.role) ? user.role : (user.role as any),
+    );
   };
 
   const filteredClinicButtons = clinicButtons.filter(filterByRole);
@@ -134,7 +136,12 @@ export default function Dashboard() {
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>
-            Good Day, {user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'Staff' : 'Staff'} 👋
+            Good Day,{" "}
+            {user
+              ? `${user.firstName || ""} ${user.lastName || ""}`.trim() ||
+                "Staff"
+              : "Staff"}{" "}
+            👋
           </Text>
           <Text style={styles.title}>Medical Dashboard</Text>
         </View>
@@ -190,7 +197,7 @@ export default function Dashboard() {
           />
         ))}
       </View>
-      
+
       {/* LOGOUT */}
       <TouchableOpacity
         activeOpacity={0.85}
@@ -199,7 +206,6 @@ export default function Dashboard() {
       >
         <Text style={styles.logoutButtonText}>Log Out Session</Text>
       </TouchableOpacity>
-
     </ScrollView>
   );
 }
