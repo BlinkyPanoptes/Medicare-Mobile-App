@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Alert,
   ScrollView,
@@ -12,16 +12,14 @@ import {
 import { Disease } from "@/types/disease";
 
 export default function DiseasesScreen() {
-  // Management & UI View Control States
   const [isCreating, setIsCreating] = useState(false);
   const [editingDiseaseId, setEditingDiseaseId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  // Form Inputs State Management
   const [name, setName] = useState("");
   const [symptoms, setSymptoms] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Local Hardcoded Mock Database Array State
   const [diseaseDatabase, setDiseaseDatabase] = useState<Disease[]>([
     {
       id: "1",
@@ -31,7 +29,19 @@ export default function DiseasesScreen() {
     },
   ]);
 
-  // Open Form Sheet for Creating a Brand New Disease
+  const filteredDiseases = useMemo(
+    () =>
+      diseaseDatabase.filter((d) => {
+        const query = searchQuery.trim().toLowerCase();
+        if (!query) return true;
+        return (
+          d.name.toLowerCase().includes(query) ||
+          d.symptoms.toLowerCase().includes(query)
+        );
+      }),
+    [diseaseDatabase, searchQuery],
+  );
+
   const openCreateForm = () => {
     setName("");
     setSymptoms("");
@@ -39,7 +49,6 @@ export default function DiseasesScreen() {
     setIsCreating(true);
   };
 
-  // Open Form Sheet pre-populated with Selected Disease Data for Updates
   const openEditForm = (disease: Disease) => {
     setName(disease.name);
     setSymptoms(disease.symptoms);
@@ -52,7 +61,6 @@ export default function DiseasesScreen() {
     if (field === "symptoms") setSymptoms("");
   };
 
-  // Save Actions: Handles both Creating and Updating Records
   const handleSaveSubmit = async () => {
     if (!name.trim() || !symptoms.trim()) {
       Alert.alert(
@@ -71,7 +79,6 @@ export default function DiseasesScreen() {
             item.id === editingDiseaseId ? { ...item, name, symptoms } : item,
           ),
         );
-
         Alert.alert(
           "Success",
           `Disease record for ${name} has been modified successfully.`,
@@ -84,7 +91,6 @@ export default function DiseasesScreen() {
           symptoms,
         };
         setDiseaseDatabase((prev) => [...prev, newDisease]);
-
         Alert.alert(
           "Disease Added",
           `Record saved for ${name} in the directory.`,
@@ -101,7 +107,6 @@ export default function DiseasesScreen() {
     }
   };
 
-  // DELETE Handling Logic Action Process
   const handleDeleteDisease = (id: string, name: string) => {
     Alert.alert(
       "Delete Disease",
@@ -134,12 +139,38 @@ export default function DiseasesScreen() {
             </TouchableOpacity>
           </View>
 
-          {diseaseDatabase.length === 0 ? (
+          {/* SEARCH BAR */}
+          <View style={styles.searchContainer}>
+            <Text style={styles.searchIcon}>🔍</Text>
+            <TextInput
+              style={styles.searchInput}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search by disease name or symptom..."
+              placeholderTextColor="#94a3b8"
+              autoCapitalize="none"
+              returnKeyType="search"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity
+                onPress={() => setSearchQuery("")}
+                style={styles.clearBtnClick}
+              >
+                <Text style={styles.clearBtnSymbol}>×</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {filteredDiseases.length === 0 && diseaseDatabase.length === 0 ? (
             <Text style={styles.emptyText}>
               No disease records found. Click add to begin.
             </Text>
+          ) : filteredDiseases.length === 0 ? (
+            <Text style={styles.emptyText}>
+              No diseases match "{searchQuery}".
+            </Text>
           ) : (
-            diseaseDatabase.map((disease) => (
+            filteredDiseases.map((disease) => (
               <View key={disease.id} style={styles.card}>
                 <View style={styles.cardInfoGroup}>
                   <Text style={styles.cardNameText}>{disease.name}</Text>
@@ -286,7 +317,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 25,
+    marginBottom: 16,
   },
   promptHeadline: {
     fontSize: 20,
@@ -303,6 +334,27 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "600",
     fontSize: 14,
+  },
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f8fafc",
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    height: 48,
+    marginBottom: 16,
+  },
+  searchIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: "#0f172a",
+    height: "100%",
   },
   emptyText: {
     textAlign: "center",

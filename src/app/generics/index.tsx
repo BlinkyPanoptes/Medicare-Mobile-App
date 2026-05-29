@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Alert,
   ScrollView,
@@ -13,7 +13,10 @@ import { Medicine } from "@/types/medicine";
 
 export default function GenericsScreen() {
   const [isCreating, setIsCreating] = useState(false);
-  const [editingMedicineId, setEditingMedicineId] = useState<string | null>(null);
+  const [editingMedicineId, setEditingMedicineId] = useState<string | null>(
+    null,
+  );
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [name, setName] = useState("");
   const [uses, setUses] = useState("");
@@ -26,6 +29,14 @@ export default function GenericsScreen() {
       uses: "Fever, mild to moderate pain relief, headache, body aches",
     },
   ]);
+
+  const filteredMedicines = useMemo(
+    () =>
+      medicineDatabase.filter((m) =>
+        m.name.toLowerCase().includes(searchQuery.trim().toLowerCase()),
+      ),
+    [medicineDatabase, searchQuery],
+  );
 
   const openCreateForm = () => {
     setName("");
@@ -64,7 +75,6 @@ export default function GenericsScreen() {
             item.id === editingMedicineId ? { ...item, name, uses } : item,
           ),
         );
-
         Alert.alert(
           "Success",
           `Medicine record for ${name} has been modified successfully.`,
@@ -77,7 +87,6 @@ export default function GenericsScreen() {
           uses,
         };
         setMedicineDatabase((prev) => [...prev, newMedicine]);
-
         Alert.alert(
           "Medicine Added",
           `Record saved for ${name} in the directory.`,
@@ -111,6 +120,7 @@ export default function GenericsScreen() {
     );
   };
 
+  // ── VIEW 1: Generics List ───────────────────────────────────────────────────
   if (!isCreating) {
     return (
       <View style={styles.container}>
@@ -125,12 +135,38 @@ export default function GenericsScreen() {
             </TouchableOpacity>
           </View>
 
-          {medicineDatabase.length === 0 ? (
+          {/* SEARCH BAR */}
+          <View style={styles.searchContainer}>
+            <Text style={styles.searchIcon}>🔍</Text>
+            <TextInput
+              style={styles.searchInput}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search generic medicine name..."
+              placeholderTextColor="#94a3b8"
+              autoCapitalize="none"
+              returnKeyType="search"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity
+                onPress={() => setSearchQuery("")}
+                style={styles.clearBtnClick}
+              >
+                <Text style={styles.clearBtnSymbol}>×</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {filteredMedicines.length === 0 && medicineDatabase.length === 0 ? (
             <Text style={styles.emptyText}>
               No medicine records found. Click add to begin.
             </Text>
+          ) : filteredMedicines.length === 0 ? (
+            <Text style={styles.emptyText}>
+              No medicines match "{searchQuery}".
+            </Text>
           ) : (
-            medicineDatabase.map((medicine) => (
+            filteredMedicines.map((medicine) => (
               <View key={medicine.id} style={styles.card}>
                 <View style={styles.cardInfoGroup}>
                   <Text style={styles.cardNameText}>{medicine.name}</Text>
@@ -163,6 +199,7 @@ export default function GenericsScreen() {
     );
   }
 
+  // ── VIEW 2: Create / Edit Form ──────────────────────────────────────────────
   return (
     <View style={styles.container}>
       <ScrollView
@@ -276,7 +313,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 25,
+    marginBottom: 16,
   },
   promptHeadline: {
     fontSize: 20,
@@ -293,6 +330,27 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "600",
     fontSize: 14,
+  },
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f8fafc",
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    height: 48,
+    marginBottom: 16,
+  },
+  searchIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: "#0f172a",
+    height: "100%",
   },
   emptyText: {
     textAlign: "center",
