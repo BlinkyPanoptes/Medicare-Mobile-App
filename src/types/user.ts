@@ -7,4 +7,13 @@ export interface User {
   email: string;
   phoneNumber: string;
   role: UserRole;
+  prcNumber?: string; // doctors only
+  specialty?: string; // doctors only
+  clinic?: {
+    name: string;
+    room: string;
+    city: string;
+    province: string;
+    contactNumber: string;
+  };
 }
