@@ -1,7 +1,6 @@
 export interface Clinic {
+  id: string;
   name: string;
-  room: string;
-  city: string;
-  province: string;
+  address: string;
   contactNumber: string;
 }

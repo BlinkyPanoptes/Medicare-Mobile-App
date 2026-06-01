@@ -1,22 +1,29 @@
-import { useAuth } from '@/components/context/auth-context';
-import { router } from 'expo-router';
-import { useState } from 'react';
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useAuth } from "@/components/context/auth-context";
+import { router } from "expo-router";
+import { useState } from "react";
+import {
+  Alert,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
-import axios from 'axios';
-import * as SecureStore from 'expo-secure-store';
+import axios from "axios";
+import * as SecureStore from "expo-secure-store";
 
-const API_URL = 'http://172.20.10.2:8000/api';
+const API_URL = "http://172.20.10.2:8000/api";
 
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
 
   // Form state
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [role, setRole] = useState<'DOCTOR' | 'SECRETARY'>('DOCTOR');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [role, setRole] = useState<"DOCTOR" | "SECRETARY">("DOCTOR");
   const [loading, setLoading] = useState(false);
 
   const handleLogout = async () => {
@@ -27,15 +34,15 @@ export default function AdminDashboard() {
   const handleCreateStaff = async () => {
     // Basic validation
     if (!email || !password || !firstName || !lastName) {
-      Alert.alert('Validation Error', 'All fields are required.');
+      Alert.alert("Validation Error", "All fields are required.");
       return;
     }
 
     setLoading(true);
     try {
-      const token = await SecureStore.getItemAsync('userToken');
-      if (!token) throw new Error('No authentication token found');
-      
+      const token = await SecureStore.getItemAsync("userToken");
+      if (!token) throw new Error("No authentication token found");
+
       console.log("APP IS TRYING TO HIT:", `${API_URL}/admin/create-staff`);
 
       const response = await axios.post(
@@ -51,21 +58,21 @@ export default function AdminDashboard() {
           headers: {
             Authorization: `Bearer ${token}`,
           },
-        }
+        },
       );
 
-      Alert.alert('Success', response.data.message);
+      Alert.alert("Success", response.data.message);
 
       // Reset form after successful creation
-      setEmail('');
-      setPassword('');
-      setFirstName('');
-      setLastName('');
-      setRole('DOCTOR');
-
+      setEmail("");
+      setPassword("");
+      setFirstName("");
+      setLastName("");
+      setRole("DOCTOR");
     } catch (error: any) {
-      const message = error.response?.data?.error || error.message || 'Something went wrong';
-      Alert.alert('Error', message);
+      const message =
+        error.response?.data?.error || error.message || "Something went wrong";
+      Alert.alert("Error", message);
     } finally {
       setLoading(false);
     }
@@ -75,8 +82,10 @@ export default function AdminDashboard() {
     <View style={styles.container}>
       <View style={styles.card}>
         <Text style={styles.title}>System Overview</Text>
-        <Text style={styles.text}>Welcome, {user?.first_name}!</Text>
-        <Text style={styles.text}>Permission Level: {user?.role.toUpperCase()}</Text>
+        <Text style={styles.text}>Welcome, {user?.firstName}!</Text>
+        <Text style={styles.text}>
+          Permission Level: {user?.role.toUpperCase()}
+        </Text>
       </View>
 
       <View style={styles.grid}>
@@ -89,18 +98,39 @@ export default function AdminDashboard() {
       </View>
 
       {/* Create Staff Form - no UI styling, just wired inputs */}
-      <TextInput placeholder="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
-      <TextInput placeholder="Password" value={password} onChangeText={setPassword} secureTextEntry />
-      <TextInput placeholder="First Name" value={firstName} onChangeText={setFirstName} />
-      <TextInput placeholder="Last Name" value={lastName} onChangeText={setLastName} />
+      <TextInput
+        placeholder="Email"
+        value={email}
+        onChangeText={setEmail}
+        autoCapitalize="none"
+        keyboardType="email-address"
+      />
+      <TextInput
+        placeholder="Password"
+        value={password}
+        onChangeText={setPassword}
+        secureTextEntry
+      />
+      <TextInput
+        placeholder="First Name"
+        value={firstName}
+        onChangeText={setFirstName}
+      />
+      <TextInput
+        placeholder="Last Name"
+        value={lastName}
+        onChangeText={setLastName}
+      />
 
       {/* Role toggle between DOCTOR and SECRETARY */}
-      <TouchableOpacity onPress={() => setRole(role === 'DOCTOR' ? 'SECRETARY' : 'DOCTOR')}>
+      <TouchableOpacity
+        onPress={() => setRole(role === "DOCTOR" ? "SECRETARY" : "DOCTOR")}
+      >
         <Text>Role: {role}</Text>
       </TouchableOpacity>
 
       <TouchableOpacity onPress={handleCreateStaff} disabled={loading}>
-        <Text>{loading ? 'Creating...' : 'Create Staff'}</Text>
+        <Text>{loading ? "Creating..." : "Create Staff"}</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>

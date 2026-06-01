@@ -10,7 +10,7 @@ import {
   View,
 } from "react-native";
 
-import { Medicine } from "@/types/medicine";
+import { Medicine } from "@/types/generic";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

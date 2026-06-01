@@ -16,15 +16,11 @@ import {
   View,
 } from "react-native";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+import { Clinic } from "@/types/clinic";
+import { Patient } from "@/types/patient";
+import { User } from "@/types/user";
 
-type PatientRecord = {
-  id: string;
-  lastName: string;
-  firstName: string;
-  gender: "Male" | "Female";
-  birthdate: string; // "January 25, 1954"
-};
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 type MedicalCertificateRecord = {
   id: string;
@@ -38,28 +34,60 @@ type MedicalCertificateRecord = {
   recommendation: string;
 };
 
-// ── Mock patient database (replace with real data source later) ───────────────
-const MOCK_PATIENTS: PatientRecord[] = [
+// ── Mock Data ─────────────────────────────────────────────────────────────────
+
+const testClinic: Clinic = {
+  id: "1",
+  name: "Crave Medical Center",
+  address: "JS Bldg. Lacson-Galo St., Bacolod City",
+  contactNumber: "09171231234",
+};
+
+const testUser: User = {
+  id: "1",
+  firstName: "Kenneth",
+  lastName: "Pedrajas",
+  email: "pedkenneth@gmail.com",
+  phoneNumber: "09958533900",
+  role: "doctor",
+  prcNumber: "1234567890",
+  specialty: "Pulmonary",
+  clinic: testClinic,
+};
+
+const MOCK_PATIENTS: Patient[] = [
   {
     id: "1",
+    createdBy: testUser,
     lastName: "Soratorio",
     firstName: "Agnes",
     gender: "Female",
-    birthdate: "January 25, 1954",
+    birthdate: new Date("1954-01-25"),
+    email: "agnes.soratorio@example.com",
+    phoneNumber: "09123456789",
+    clinic: testClinic,
   },
   {
     id: "2",
+    createdBy: testUser,
     lastName: "Dela Cruz",
     firstName: "Juan",
     gender: "Male",
-    birthdate: "March 10, 1990",
+    birthdate: new Date("1990-03-10"),
+    email: "juan.dela.cruz@example.com",
+    phoneNumber: "09234567890",
+    clinic: testClinic,
   },
   {
     id: "3",
+    createdBy: testUser,
     lastName: "Santos",
     firstName: "Maria",
     gender: "Female",
-    birthdate: "July 4, 1985",
+    birthdate: new Date("1985-07-04"),
+    email: "maria.santos@example.com",
+    phoneNumber: "09345678901",
+    clinic: testClinic,
   },
 ];
 
@@ -111,9 +139,7 @@ const generateMedicalCertificateHTML = (
   doctorName: string,
   specialty: string,
   clinicName: string,
-  clinicRoom: string,
-  clinicCity: string,
-  clinicProvince: string,
+  clinicAddress: string,
   clinicContact: string,
   prcNumber: string,
   issuedAt: Date,
@@ -200,12 +226,11 @@ const generateMedicalCertificateHTML = (
 </head>
 <body>
   <div class="header">
-    <div class="clinic-name">${clinicName}</div>
-    <div class="clinic-sub">${clinicRoom}</div>
-    <div class="clinic-sub">${clinicCity}, ${clinicProvince}</div>
-    <div class="clinic-sub">Tel No.: ${clinicContact}</div>
-    <div class="doctor-name">${doctorName}</div>
-    <div class="doctor-specialty">${specialty}</div>
+    <div class="clinic-name">${testClinic.name}</div>
+    <div class="clinic-sub">${testClinic.address}</div>
+    <div class="clinic-sub">Tel No.: ${testClinic.contactNumber}</div>
+    <div class="doctor-name">${testUser.firstName} ${testUser.lastName}</div>
+    <div class="doctor-specialty">${testUser.specialty}</div>
   </div>
   <div class="cert-meta">
     <div class="cert-id">MEDICAL CERTIFICATE ID: ${cert.id}</div>
@@ -235,8 +260,8 @@ const generateMedicalCertificateHTML = (
   </div>
   <div class="signature-block">
     <div class="signature-line"></div>
-    <div class="signature-name">${doctorName}</div>
-    <div class="signature-prc">PRC No.: ${prcNumber}</div>
+    <div class="signature-name">${testUser.firstName} ${testUser.lastName}</div>
+    <div class="signature-prc">PRC No.: ${testUser.prcNumber}</div>
   </div>
   <div class="footer-note">
     <strong>Note to User:</strong> The information contained in this medical certificate is confidential
@@ -265,10 +290,14 @@ export default function MedicalCertificateScreen() {
   const [patientGender, setPatientGender] = useState<"Male" | "Female">(
     "Female",
   );
-  const [birthdate, setBirthdate] = useState("");
+
+  // Single source of truth for birthdate — always a Date | null
   const [birthdateObj, setBirthdateObj] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [dateValue, setDateValue] = useState(new Date());
+
+  // Derived display string — never stored separately
+  const birthdateDisplay = birthdateObj ? formatDisplayDate(birthdateObj) : "";
 
   // Certificate fields
   const [complaints, setComplaints] = useState("");
@@ -293,23 +322,12 @@ export default function MedicalCertificateScreen() {
   }, [patientSearch]);
 
   // ── Autofill from selected patient ─────────────────────────────────────────
-  const handleSelectPatient = (patient: PatientRecord) => {
+  const handleSelectPatient = (patient: Patient) => {
     setPatientLastName(patient.lastName);
     setPatientFirstName(patient.firstName);
-    setPatientGender(patient.gender);
-
-    // Parse birthdate string back to Date object for age calculation
-    const parsed = new Date(patient.birthdate);
-    if (!isNaN(parsed.getTime())) {
-      setBirthdateObj(parsed);
-      setDateValue(parsed);
-      setBirthdate(patient.birthdate);
-    } else {
-      // Fallback: just set the display string without age calculation
-      setBirthdate(patient.birthdate);
-      setBirthdateObj(null);
-    }
-
+    setPatientGender(patient.gender as "Male" | "Female");
+    setBirthdateObj(patient.birthdate); // already a Date
+    setDateValue(patient.birthdate); // already a Date
     setShowPatientPicker(false);
     setPatientSearch("");
   };
@@ -318,9 +336,8 @@ export default function MedicalCertificateScreen() {
   const onDateChange = (event: any, selectedDate?: Date) => {
     if (Platform.OS === "android") setShowDatePicker(false);
     if (selectedDate) {
-      setDateValue(selectedDate);
       setBirthdateObj(selectedDate);
-      setBirthdate(formatDisplayDate(selectedDate));
+      setDateValue(selectedDate);
     }
   };
 
@@ -329,7 +346,6 @@ export default function MedicalCertificateScreen() {
     setPatientLastName("");
     setPatientFirstName("");
     setPatientGender("Female");
-    setBirthdate("");
     setBirthdateObj(null);
     setDateValue(new Date());
     setComplaints("");
@@ -345,9 +361,7 @@ export default function MedicalCertificateScreen() {
       : "Physician";
     const specialty = user?.specialty ?? "General Practice";
     const clinicName = user?.clinic?.name ?? "CraveCare Clinic";
-    const clinicRoom = user?.clinic?.room ?? "";
-    const clinicCity = user?.clinic?.city ?? "";
-    const clinicProvince = user?.clinic?.province ?? "";
+    const clinicAddress = user?.clinic?.address ?? "";
     const clinicContact = user?.clinic?.contactNumber ?? "";
     const prcNumber = user?.prcNumber ?? "N/A";
     const issuedAt = new Date();
@@ -357,9 +371,7 @@ export default function MedicalCertificateScreen() {
       doctorName,
       specialty,
       clinicName,
-      clinicRoom,
-      clinicCity,
-      clinicProvince,
+      clinicAddress,
       clinicContact,
       prcNumber,
       issuedAt,
@@ -412,7 +424,7 @@ export default function MedicalCertificateScreen() {
     if (
       !patientLastName.trim() ||
       !patientFirstName.trim() ||
-      !birthdate.trim() ||
+      !birthdateObj || // check the Date object, not a string
       !complaints.trim() ||
       !diagnosis.trim() ||
       !recommendation.trim()
@@ -427,7 +439,7 @@ export default function MedicalCertificateScreen() {
     setIsSubmitting(true);
 
     try {
-      const age = birthdateObj ? calculateAge(birthdateObj) : 0;
+      const age = calculateAge(birthdateObj);
 
       const newCert: MedicalCertificateRecord = {
         id: generateCertificateId(),
@@ -635,7 +647,7 @@ export default function MedicalCertificateScreen() {
           >
             <TextInput
               style={styles.fieldInput}
-              value={birthdate}
+              value={birthdateDisplay} // derived from birthdateObj
               placeholder="Select date of birth"
               placeholderTextColor="#94a3b8"
               editable={false}
@@ -747,7 +759,6 @@ export default function MedicalCertificateScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
-            {/* Modal Header */}
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select a Patient</Text>
               <TouchableOpacity
@@ -760,7 +771,6 @@ export default function MedicalCertificateScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Patient Search */}
             <View style={styles.modalSearchContainer}>
               <Text style={styles.modalSearchIcon}>🔍</Text>
               <TextInput
@@ -781,7 +791,6 @@ export default function MedicalCertificateScreen() {
               )}
             </View>
 
-            {/* Patient List */}
             <FlatList
               data={filteredPatients}
               keyExtractor={(item) => item.id}
@@ -808,7 +817,7 @@ export default function MedicalCertificateScreen() {
                       {item.lastName}, {item.firstName}
                     </Text>
                     <Text style={styles.patientPickerSub}>
-                      {item.gender} • {item.birthdate}
+                      {item.gender} • {formatDisplayDate(item.birthdate)}
                     </Text>
                   </View>
                   <Text style={styles.patientPickerChevron}>›</Text>
@@ -881,7 +890,6 @@ const styles = StyleSheet.create({
   },
   exportBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
 
-  // Select patient button
   selectPatientBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -903,7 +911,6 @@ const styles = StyleSheet.create({
   },
   selectPatientChevron: { fontSize: 20, color: "#095c29", fontWeight: "600" },
 
-  // OR divider
   orDivider: {
     flexDirection: "row",
     alignItems: "center",
@@ -1021,7 +1028,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  // Patient picker modal
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.4)",
