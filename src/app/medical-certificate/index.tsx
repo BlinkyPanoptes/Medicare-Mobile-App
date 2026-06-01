@@ -16,80 +16,16 @@ import {
   View,
 } from "react-native";
 
-import { Clinic } from "@/types/clinic";
+import { MedicalCertificate } from "@/types/medical-certificate";
 import { Patient } from "@/types/patient";
-import { User } from "@/types/user";
 
+import { MOCK_MEDICAL_CERTIFICATES, MOCK_PATIENTS, MOCK_USER } from "@/mocks";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type MedicalCertificateRecord = {
-  id: string;
-  patientLastName: string;
-  patientFirstName: string;
-  patientAge: string;
-  patientGender: "Male" | "Female";
-  dateIssued: string;
-  complaints: string;
-  diagnosis: string;
-  recommendation: string;
-};
-
-// ── Mock Data ─────────────────────────────────────────────────────────────────
-
-const testClinic: Clinic = {
-  id: "1",
-  name: "Crave Medical Center",
-  address: "JS Bldg. Lacson-Galo St., Bacolod City",
-  contactNumber: "09171231234",
-};
-
-const testUser: User = {
-  id: "1",
-  firstName: "Kenneth",
-  lastName: "Pedrajas",
-  email: "pedkenneth@gmail.com",
-  phoneNumber: "09958533900",
-  role: "doctor",
-  prcNumber: "1234567890",
-  specialty: "Pulmonary",
-  clinic: testClinic,
-};
-
-const MOCK_PATIENTS: Patient[] = [
-  {
-    id: "1",
-    createdBy: testUser,
-    lastName: "Soratorio",
-    firstName: "Agnes",
-    gender: "Female",
-    birthdate: new Date("1954-01-25"),
-    email: "agnes.soratorio@example.com",
-    phoneNumber: "09123456789",
-    clinic: testClinic,
-  },
-  {
-    id: "2",
-    createdBy: testUser,
-    lastName: "Dela Cruz",
-    firstName: "Juan",
-    gender: "Male",
-    birthdate: new Date("1990-03-10"),
-    email: "juan.dela.cruz@example.com",
-    phoneNumber: "09234567890",
-    clinic: testClinic,
-  },
-  {
-    id: "3",
-    createdBy: testUser,
-    lastName: "Santos",
-    firstName: "Maria",
-    gender: "Female",
-    birthdate: new Date("1985-07-04"),
-    email: "maria.santos@example.com",
-    phoneNumber: "09345678901",
-    clinic: testClinic,
-  },
-];
+const testPatients = MOCK_PATIENTS;
+const testUser = MOCK_USER;
+const testMedicalCertificates = MOCK_MEDICAL_CERTIFICATES;
+const testClinic = testUser.clinic;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -135,7 +71,7 @@ const formatIssuedDateTime = (date: Date) => {
 // ── PDF HTML Generator ────────────────────────────────────────────────────────
 
 const generateMedicalCertificateHTML = (
-  cert: MedicalCertificateRecord,
+  cert: MedicalCertificate,
   doctorName: string,
   specialty: string,
   clinicName: string,
@@ -226,11 +162,11 @@ const generateMedicalCertificateHTML = (
 </head>
 <body>
   <div class="header">
-    <div class="clinic-name">${testClinic.name}</div>
-    <div class="clinic-sub">${testClinic.address}</div>
-    <div class="clinic-sub">Tel No.: ${testClinic.contactNumber}</div>
-    <div class="doctor-name">${testUser.firstName} ${testUser.lastName}</div>
-    <div class="doctor-specialty">${testUser.specialty}</div>
+    <div class="clinic-name">${testUser?.clinic?.name}</div>
+    <div class="clinic-sub">${testUser?.clinic?.address}</div>
+    <div class="clinic-sub">Tel No.: ${testUser?.clinic?.contactNumber}</div>
+    <div class="doctor-name">${testUser?.firstName} ${testUser?.lastName}</div>
+    <div class="doctor-specialty">${testUser?.specialty}</div>
   </div>
   <div class="cert-meta">
     <div class="cert-id">MEDICAL CERTIFICATE ID: ${cert.id}</div>
@@ -238,9 +174,9 @@ const generateMedicalCertificateHTML = (
   </div>
   <div class="title">MEDICAL CERTIFICATE</div>
   <div class="patient-block">
-    <div class="patient-line"><span>Patient:</span> ${cert.patientLastName}, ${cert.patientFirstName}</div>
-    <div class="patient-line"><span>Age:</span> ${cert.patientAge} years old</div>
-    <div class="patient-line"><span>Gender:</span> ${cert.patientGender}</div>
+    <div class="patient-line"><span>Patient:</span> ${cert.patient.lastName}, ${cert.patient.firstName}</div>
+    <div class="patient-line"><span>Age:</span> ${calculateAge(cert.patient.birthdate)} years old</div>
+    <div class="patient-line"><span>Gender:</span> ${cert.patient.gender}</div>
   </div>
   <div class="section">
     <div class="section-label">Complaints:</div>
@@ -306,15 +242,15 @@ export default function MedicalCertificateScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Issued certificates history
-  const [certificates, setCertificates] = useState<MedicalCertificateRecord[]>(
-    [],
+  const [certificates, setCertificates] = useState<MedicalCertificate[]>(
+    testMedicalCertificates,
   );
 
   // ── Patient search filter (useMemo) ─────────────────────────────────────────
   const filteredPatients = useMemo(() => {
     const query = patientSearch.trim().toLowerCase();
-    if (!query) return MOCK_PATIENTS;
-    return MOCK_PATIENTS.filter(
+    if (!query) return testPatients;
+    return testPatients.filter(
       (p) =>
         p.lastName.toLowerCase().includes(query) ||
         p.firstName.toLowerCase().includes(query),
@@ -355,7 +291,7 @@ export default function MedicalCertificateScreen() {
   };
 
   // ── Export PDF ──────────────────────────────────────────────────────────────
-  const handleExportPDF = async (cert: MedicalCertificateRecord) => {
+  const handleExportPDF = async (cert: MedicalCertificate) => {
     const doctorName = user
       ? `${user.firstName} ${user.lastName}, MD`
       : "Physician";
@@ -406,8 +342,8 @@ export default function MedicalCertificateScreen() {
                 return;
               }
               await MailComposer.composeAsync({
-                subject: `Medical Certificate — ${cert.patientFirstName} ${cert.patientLastName}`,
-                body: `Please find attached the medical certificate for ${cert.patientFirstName} ${cert.patientLastName}.`,
+                subject: `Medical Certificate — ${cert.patient.firstName} ${cert.patient.lastName}`,
+                body: `Please find attached the medical certificate for ${cert.patient.firstName} ${cert.patient.lastName}.`,
                 attachments: [uri],
               });
             } catch (err) {
@@ -441,13 +377,22 @@ export default function MedicalCertificateScreen() {
     try {
       const age = calculateAge(birthdateObj);
 
-      const newCert: MedicalCertificateRecord = {
+      const newCert: MedicalCertificate = {
         id: generateCertificateId(),
-        patientLastName,
-        patientFirstName,
-        patientAge: age.toString(),
-        patientGender,
-        dateIssued: new Date().toISOString(),
+        type: "medical-certificate",
+        createdBy: testUser,
+        dateIssued: new Date(),
+        patient: {
+          id: generateCertificateId(),
+          createdBy: testUser,
+          firstName: patientFirstName.trim(),
+          lastName: patientLastName.trim(),
+          gender: patientGender,
+          birthdate: birthdateObj,
+          email: "",
+          phoneNumber: "",
+          clinic: testClinic!,
+        },
         complaints,
         diagnosis,
         recommendation,
@@ -457,7 +402,7 @@ export default function MedicalCertificateScreen() {
 
       Alert.alert(
         "Certificate Issued",
-        `Medical certificate for ${patientFirstName} ${patientLastName} has been issued.`,
+        `Medical certificate for ${newCert.patient.firstName} ${newCert.patient.lastName} has been issued.`,
         [
           {
             text: "Export PDF",
@@ -504,7 +449,7 @@ export default function MedicalCertificateScreen() {
               <View key={cert.id} style={styles.card}>
                 <View style={styles.cardHeader}>
                   <Text style={styles.cardName}>
-                    {cert.patientLastName}, {cert.patientFirstName}
+                    {cert.patient.lastName}, {cert.patient.firstName}
                   </Text>
                   <Text style={styles.cardDate}>
                     {formatDisplayDate(new Date(cert.dateIssued))}

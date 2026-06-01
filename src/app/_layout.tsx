@@ -23,7 +23,7 @@ function RootStack() {
         options={{
           // Safely updates title dynamically using only the email string
           title: user
-            ? `Welcome, ${user.role === "doctor" ? "Dr. " : ""}${user.first_name}`
+            ? `Welcome, ${user.role === "doctor" ? "Dr. " : ""}${user.firstName}`
             : "Welcome",
           ...headerStyles,
         }}
@@ -44,7 +44,7 @@ function RootStack() {
           ...headerStyles,
         }}
       />
-      
+
       <Stack.Screen
         name="consultations"
         options={{

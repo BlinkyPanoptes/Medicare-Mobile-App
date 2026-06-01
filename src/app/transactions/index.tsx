@@ -175,7 +175,7 @@ const MOCK_TRANSACTIONS: Transaction[] = [
   },
 ];
 
-// ── End of Mock Data ─────────────────────────────────────────────────────────────────
+// ── End of Mock Data
 
 // ── Filter Types ──────────────────────────────────────────────────────────────
 type TypeFilter = "all" | "prescription" | "medical-certificate";

@@ -9,46 +9,43 @@ import {
   View,
 } from "react-native";
 
-import { Medicine } from "@/types/medicine";
+import {
+  MOCK_GENERICS
+} from "@/mocks";
+import { Generic } from "@/types/generic";
+const testGenerics = MOCK_GENERICS;
 
 export default function GenericsScreen() {
   const [isCreating, setIsCreating] = useState(false);
-  const [editingMedicineId, setEditingMedicineId] = useState<string | null>(
-    null,
-  );
+  const [editingGenericId, setEditingGenericId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
   const [name, setName] = useState("");
   const [uses, setUses] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [medicineDatabase, setMedicineDatabase] = useState<Medicine[]>([
-    {
-      id: "1",
-      name: "Paracetamol",
-      uses: "Fever, mild to moderate pain relief, headache, body aches",
-    },
-  ]);
+  const [GenericDatabase, setGenericDatabase] =
+    useState<Generic[]>(testGenerics);
 
-  const filteredMedicines = useMemo(
+  const filteredGenerics = useMemo(
     () =>
-      medicineDatabase.filter((m) =>
+      GenericDatabase.filter((m) =>
         m.name.toLowerCase().includes(searchQuery.trim().toLowerCase()),
       ),
-    [medicineDatabase, searchQuery],
+    [GenericDatabase, searchQuery],
   );
 
   const openCreateForm = () => {
     setName("");
     setUses("");
-    setEditingMedicineId(null);
+    setEditingGenericId(null);
     setIsCreating(true);
   };
 
-  const openEditForm = (medicine: Medicine) => {
-    setName(medicine.name);
-    setUses(medicine.uses);
-    setEditingMedicineId(medicine.id);
+  const openEditForm = (Generic: Generic) => {
+    setName(Generic.name);
+    setUses(Generic.uses);
+    setEditingGenericId(Generic.id);
     setIsCreating(true);
   };
 
@@ -61,7 +58,7 @@ export default function GenericsScreen() {
     if (!name.trim() || !uses.trim()) {
       Alert.alert(
         "Missing Fields",
-        "Please complete the medicine name and uses.",
+        "Please complete the Generic name and uses.",
       );
       return;
     }
@@ -69,26 +66,26 @@ export default function GenericsScreen() {
     setIsSubmitting(true);
 
     try {
-      if (editingMedicineId) {
-        setMedicineDatabase((prev) =>
+      if (editingGenericId) {
+        setGenericDatabase((prev) =>
           prev.map((item) =>
-            item.id === editingMedicineId ? { ...item, name, uses } : item,
+            item.id === editingGenericId ? { ...item, name, uses } : item,
           ),
         );
         Alert.alert(
           "Success",
-          `Medicine record for ${name} has been modified successfully.`,
+          `Generic record for ${name} has been modified successfully.`,
           [{ text: "OK", onPress: () => setIsCreating(false) }],
         );
       } else {
-        const newMedicine: Medicine = {
+        const newGeneric: Generic = {
           id: Date.now().toString(),
           name,
           uses,
         };
-        setMedicineDatabase((prev) => [...prev, newMedicine]);
+        setGenericDatabase((prev) => [...prev, newGeneric]);
         Alert.alert(
-          "Medicine Added",
+          "Generic Added",
           `Record saved for ${name} in the directory.`,
           [{ text: "OK", onPress: () => setIsCreating(false) }],
         );
@@ -103,9 +100,9 @@ export default function GenericsScreen() {
     }
   };
 
-  const handleDeleteMedicine = (id: string, name: string) => {
+  const handleDeleteGeneric = (id: string, name: string) => {
     Alert.alert(
-      "Delete Medicine",
+      "Delete Generic",
       `Are you sure you want to permanently remove the record for ${name}?`,
       [
         { text: "Cancel", style: "cancel" },
@@ -113,7 +110,7 @@ export default function GenericsScreen() {
           text: "Delete",
           style: "destructive",
           onPress: () => {
-            setMedicineDatabase((prev) => prev.filter((m) => m.id !== id));
+            setGenericDatabase((prev) => prev.filter((m) => m.id !== id));
           },
         },
       ],
@@ -129,9 +126,9 @@ export default function GenericsScreen() {
           contentContainerStyle={styles.content}
         >
           <View style={styles.listHeaderRow}>
-            <Text style={styles.promptHeadline}>Generic Medicines</Text>
+            <Text style={styles.promptHeadline}>Generic Generics</Text>
             <TouchableOpacity style={styles.addBtn} onPress={openCreateForm}>
-              <Text style={styles.addBtnText}>+ Add Medicine</Text>
+              <Text style={styles.addBtnText}>+ Add Generic</Text>
             </TouchableOpacity>
           </View>
 
@@ -142,7 +139,7 @@ export default function GenericsScreen() {
               style={styles.searchInput}
               value={searchQuery}
               onChangeText={setSearchQuery}
-              placeholder="Search generic medicine name..."
+              placeholder="Search generic Generic name..."
               placeholderTextColor="#94a3b8"
               autoCapitalize="none"
               returnKeyType="search"
@@ -157,35 +154,35 @@ export default function GenericsScreen() {
             )}
           </View>
 
-          {filteredMedicines.length === 0 && medicineDatabase.length === 0 ? (
+          {filteredGenerics.length === 0 && GenericDatabase.length === 0 ? (
             <Text style={styles.emptyText}>
-              No medicine records found. Click add to begin.
+              No Generic records found. Click add to begin.
             </Text>
-          ) : filteredMedicines.length === 0 ? (
+          ) : filteredGenerics.length === 0 ? (
             <Text style={styles.emptyText}>
-              No medicines match "{searchQuery}".
+              No Generics match "{searchQuery}".
             </Text>
           ) : (
-            filteredMedicines.map((medicine) => (
-              <View key={medicine.id} style={styles.card}>
+            filteredGenerics.map((Generic) => (
+              <View key={Generic.id} style={styles.card}>
                 <View style={styles.cardInfoGroup}>
-                  <Text style={styles.cardNameText}>{medicine.name}</Text>
+                  <Text style={styles.cardNameText}>{Generic.name}</Text>
                   <Text style={styles.cardSubDetails} numberOfLines={2}>
-                    💊 {medicine.uses}
+                    💊 {Generic.uses}
                   </Text>
                 </View>
 
                 <View style={styles.cardActionsGroup}>
                   <TouchableOpacity
                     style={styles.editButton}
-                    onPress={() => openEditForm(medicine)}
+                    onPress={() => openEditForm(Generic)}
                   >
                     <Text style={styles.editButtonText}>Edit</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.deleteButton}
                     onPress={() =>
-                      handleDeleteMedicine(medicine.id, medicine.name)
+                      handleDeleteGeneric(Generic.id, Generic.name)
                     }
                   >
                     <Text style={styles.deleteButtonText}>Delete</Text>
@@ -208,18 +205,18 @@ export default function GenericsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.promptHeadline}>
-          {editingMedicineId ? "Edit Medicine Record" : "Add a New Medicine"}
+          {editingGenericId ? "Edit Generic Record" : "Add a New Generic"}
         </Text>
 
-        {/* MEDICINE NAME INPUT */}
+        {/* Generic NAME INPUT */}
         <View style={styles.fieldWrapper}>
-          <Text style={styles.fieldLabelText}>Medicine Name</Text>
+          <Text style={styles.fieldLabelText}>Generic Name</Text>
           <View style={styles.inputContainerRow}>
             <TextInput
               style={styles.fieldInput}
               value={name}
               onChangeText={setName}
-              placeholder="Enter medicine name"
+              placeholder="Enter Generic name"
               placeholderTextColor="#94a3b8"
             />
             {name.length > 0 && (
@@ -233,15 +230,15 @@ export default function GenericsScreen() {
           </View>
         </View>
 
-        {/* MEDICINE USES INPUT */}
+        {/* Generic USES INPUT */}
         <View style={styles.fieldWrapper}>
-          <Text style={styles.fieldLabelText}>Medicine Uses</Text>
+          <Text style={styles.fieldLabelText}>Generic Uses</Text>
           <View style={[styles.inputContainerRow, styles.textAreaContainer]}>
             <TextInput
               style={[styles.fieldInput, styles.textArea]}
               value={uses}
               onChangeText={setUses}
-              placeholder="Describe the uses of this medicine"
+              placeholder="Describe the uses of this Generic"
               placeholderTextColor="#94a3b8"
               multiline
               numberOfLines={4}

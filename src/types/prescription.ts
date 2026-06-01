@@ -3,7 +3,7 @@ import { Generic } from "./generic";
 import { Patient } from "./patient";
 import { User } from "./user";
 
-type Medication = {
+export type Medication = {
   generic: Generic;
   brand: Brand;
   dosage: string;

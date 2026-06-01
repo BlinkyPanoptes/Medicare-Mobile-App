@@ -10,27 +10,11 @@ import {
   View,
 } from "react-native";
 
-import { Medicine } from "@/types/generic";
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-type DrugBrand = {
-  id: string;
-  name: string;
-  genericIds: string[]; // references Medicine ids from generics
-};
-
-// ── Mock generics pulled from your existing generics database ─────────────────
-// In the future, this would come from a shared store or API
-const MOCK_GENERICS: Medicine[] = [
-  { id: "1", name: "Paracetamol", uses: "Fever, mild to moderate pain relief" },
-  { id: "2", name: "Amoxicillin", uses: "Bacterial infections" },
-  { id: "3", name: "Ibuprofen", uses: "Pain, fever, inflammation" },
-  { id: "4", name: "Cetirizine", uses: "Allergies, hay fever" },
-  { id: "5", name: "Metformin", uses: "Type 2 diabetes management" },
-];
-
-// ── Screen ────────────────────────────────────────────────────────────────────
+import { MOCK_BRANDS, MOCK_GENERICS } from "@/mocks";
+import { Brand } from "@/types/brand";
+import { Generic } from "@/types/generic";
+const testBrands = MOCK_BRANDS;
+const testGenerics = MOCK_GENERICS;
 
 export default function BrandDirectoryScreen() {
   const [isCreating, setIsCreating] = useState(false);
@@ -46,21 +30,15 @@ export default function BrandDirectoryScreen() {
   const [showGenericPicker, setShowGenericPicker] = useState(false);
 
   // Brand database
-  const [brandDatabase, setBrandDatabase] = useState<DrugBrand[]>([
-    {
-      id: "1",
-      name: "Biogesic",
-      genericIds: ["1"], // Paracetamol
-    },
-  ]);
+  const [brandDatabase, setBrandDatabase] = useState<Brand[]>(MOCK_BRANDS);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
-  const getGenericById = (id: string) => MOCK_GENERICS.find((g) => g.id === id);
+  const getGenericById = (id: string) => testGenerics.find((g) => g.id === id);
 
-  const getGenericNamesForBrand = (brand: DrugBrand) =>
-    brand.genericIds
-      .map((id) => getGenericById(id)?.name)
+  const getGenericNamesForBrand = (brand: Brand) =>
+    brand.generics
+      ?.map((g) => g.name)
       .filter(Boolean)
       .join(", ");
 
@@ -79,9 +57,9 @@ export default function BrandDirectoryScreen() {
     setIsCreating(true);
   };
 
-  const openEditForm = (brand: DrugBrand) => {
+  const openEditForm = (brand: Brand) => {
     setBrandName(brand.name);
-    setSelectedGenericIds([...brand.genericIds]);
+    setSelectedGenericIds([...(brand.generics?.map((g) => g.id) || [])]);
     setEditingBrandId(brand.id);
     setIsCreating(true);
   };
@@ -101,7 +79,13 @@ export default function BrandDirectoryScreen() {
         setBrandDatabase((prev) =>
           prev.map((item) =>
             item.id === editingBrandId
-              ? { ...item, name: brandName, genericIds: selectedGenericIds }
+              ? {
+                  ...item,
+                  name: brandName,
+                  generics: selectedGenericIds
+                    .map((id) => getGenericById(id))
+                    .filter((g): g is Generic => !!g),
+                }
               : item,
           ),
         );
@@ -111,10 +95,12 @@ export default function BrandDirectoryScreen() {
           [{ text: "OK", onPress: () => setIsCreating(false) }],
         );
       } else {
-        const newBrand: DrugBrand = {
+        const newBrand: Brand = {
           id: Date.now().toString(),
           name: brandName,
-          genericIds: selectedGenericIds,
+          generics: selectedGenericIds
+            .map((id) => getGenericById(id))
+            .filter((g): g is Generic => !!g),
         };
         setBrandDatabase((prev) => [...prev, newBrand]);
         Alert.alert(
@@ -159,8 +145,8 @@ export default function BrandDirectoryScreen() {
         if (brand.name.toLowerCase().includes(query)) return true;
 
         // Match by any linked generic name
-        return brand.genericIds.some((id) =>
-          getGenericById(id)?.name.toLowerCase().includes(query),
+        return brand.generics?.some((generic) =>
+          generic.name.toLowerCase().includes(query),
         );
       }),
     [brandDatabase, searchQuery],
@@ -217,7 +203,7 @@ export default function BrandDirectoryScreen() {
               <View key={brand.id} style={styles.card}>
                 <View style={styles.cardInfoGroup}>
                   <Text style={styles.cardNameText}>{brand.name}</Text>
-                  {brand.genericIds.length > 0 ? (
+                  {brand.generics?.length > 0 ? (
                     <Text style={styles.cardSubDetails} numberOfLines={2}>
                       💊 {getGenericNamesForBrand(brand)}
                     </Text>
@@ -370,7 +356,7 @@ export default function BrandDirectoryScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              {MOCK_GENERICS.map((generic) => {
+              {testGenerics.map((generic) => {
                 const isSelected = selectedGenericIds.includes(generic.id);
                 return (
                   <TouchableOpacity
