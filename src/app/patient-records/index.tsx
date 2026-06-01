@@ -1,8 +1,11 @@
-import { fetchPatients, createPatient, updatePatient, deletePatient } from "@/api/patient";
-import { useState, useEffect } from "react";
+import { createPatient, deletePatient, fetchPatients, updatePatient } from "@/api/patient";
+import { useAuth } from "@/components/context/auth-context";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import { useEffect, useState, useMemo } from "react";
 import {
   Alert,
   Platform,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,8 +13,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
-import { useAuth } from "@/components/context/auth-context";
 
 type PatientRecord = {
   id: string;
@@ -29,6 +30,8 @@ export default function PatientRecordsScreen() {
   const [isCreating, setIsCreating] = useState(false);
   const [editingPatientId, setEditingPatientId] = useState<string | null>(null);
   const [patientDatabase, setPatientDatabase] = useState<PatientRecord[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState(""); // ✅ single declaration, inside component
 
   // Form Inputs
   const [lastName, setLastName] = useState("");
@@ -43,15 +46,17 @@ export default function PatientRecordsScreen() {
 
   // --- DATA LOADING ---
 
-  const loadPatients = async () => {
+  const loadPatients = async (showRefresh = false) => {
+    if (showRefresh) setIsRefreshing(true);
     try {
       const response = await fetchPatients();
+      // Collect all pages if paginated, or just use .data.data
       const apiData = response.data.data || [];
       const formattedData = apiData.map((p: any) => ({
         id: p.id.toString(),
         lastName: p.last_name,
         firstName: p.first_name,
-        gender: p.gender,
+        gender: p.gender ?? "",
         birthdate: p.birthdate,
         email: p.email ?? "",
         mobileNumber: p.phone_number ?? "",
@@ -60,12 +65,26 @@ export default function PatientRecordsScreen() {
     } catch (error) {
       console.error("Error fetching patients:", error);
       Alert.alert("Network Error", "Could not load patients. Check your connection.");
+    } finally {
+      if (showRefresh) setIsRefreshing(false);
     }
   };
 
   useEffect(() => {
     loadPatients();
   }, []);
+
+  // --- SEARCH & SORT ---
+
+  const displayedPatients = useMemo(() => {
+    const q = searchQuery.toLowerCase();
+    return patientDatabase
+      .filter((p) =>
+        `${p.firstName} ${p.lastName}`.toLowerCase().includes(q) ||
+        `${p.lastName} ${p.firstName}`.toLowerCase().includes(q)
+      )
+      .sort((a, b) => a.lastName.localeCompare(b.lastName));
+  }, [patientDatabase, searchQuery]);
 
   // --- FORM HELPERS ---
 
@@ -103,7 +122,6 @@ export default function PatientRecordsScreen() {
     if (Platform.OS === "android") setShowDatePicker(false);
     if (selectedDate) {
       setDateValue(selectedDate);
-      // Send YYYY-MM-DD to Laravel (matches 'date' validation rule)
       setBirthdate(selectedDate.toISOString().split("T")[0]);
     }
   };
@@ -131,17 +149,15 @@ export default function PatientRecordsScreen() {
       if (editingPatientId) {
         await updatePatient(editingPatientId, payload);
         Alert.alert("Success", `Patient data for ${firstName} ${lastName} has been updated.`, [
-          { text: "OK", onPress: () => setIsCreating(false) },
+          { text: "OK", onPress: () => { setIsCreating(false); loadPatients(); } },
         ]);
       } else {
         await createPatient(payload);
         Alert.alert("Patient Added", `Record saved for ${firstName} ${lastName}.`, [
-          { text: "OK", onPress: () => setIsCreating(false) },
+          { text: "OK", onPress: () => { setIsCreating(false); loadPatients(); } },
         ]);
       }
-      await loadPatients();
     } catch (err: any) {
-      // Surface the actual Laravel validation error if available
       const serverMessage =
         err?.response?.data?.message ||
         Object.values(err?.response?.data?.errors ?? {})?.[0]?.[0] ||
@@ -179,18 +195,49 @@ export default function PatientRecordsScreen() {
   if (!isCreating) {
     return (
       <View style={styles.container}>
-        <ScrollView style={styles.scroller} contentContainerStyle={styles.content}>
+        <ScrollView
+          style={styles.scroller}
+          contentContainerStyle={styles.content}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={() => loadPatients(true)}
+              tintColor="#095c29"
+            />
+          }
+        >
+          {/* SEARCH BAR */}
+          <View style={styles.searchBarWrapper}>
+            <TextInput
+              style={styles.searchBarInput}
+              placeholder="Search patients by name..."
+              placeholderTextColor="#94a3b8"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery("")} style={styles.clearBtnClick}>
+                <Text style={styles.clearBtnSymbol}>×</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
           <View style={styles.listHeaderRow}>
-            <Text style={styles.promptHeadline}>Registered Patients</Text>
+            <Text style={styles.promptHeadline}>
+              Registered Patients{" "}
+              <Text style={styles.patientCount}>({displayedPatients.length})</Text>
+            </Text>
             <TouchableOpacity style={styles.addPatientBtn} onPress={openCreateForm}>
               <Text style={styles.addPatientBtnText}>+ Add Patient</Text>
             </TouchableOpacity>
           </View>
 
-          {patientDatabase.length === 0 ? (
-            <Text style={styles.emptyText}>No patient records found. Click add to begin.</Text>
+          {displayedPatients.length === 0 ? (
+            <Text style={styles.emptyText}>
+              {searchQuery ? "No patients match your search." : "No patient records found."}
+            </Text>
           ) : (
-            patientDatabase.map((patient) => (
+            displayedPatients.map((patient) => (
               <View key={patient.id} style={styles.patientCard}>
                 <View style={styles.cardInfoGroup}>
                   <Text style={styles.cardNameText}>
@@ -254,10 +301,7 @@ export default function PatientRecordsScreen() {
               placeholderTextColor="#94a3b8"
             />
             {lastName.length > 0 && (
-              <TouchableOpacity
-                onPress={() => handleClearField("lastName")}
-                style={styles.clearBtnClick}
-              >
+              <TouchableOpacity onPress={() => handleClearField("lastName")} style={styles.clearBtnClick}>
                 <Text style={styles.clearBtnSymbol}>×</Text>
               </TouchableOpacity>
             )}
@@ -276,10 +320,7 @@ export default function PatientRecordsScreen() {
               placeholderTextColor="#94a3b8"
             />
             {firstName.length > 0 && (
-              <TouchableOpacity
-                onPress={() => handleClearField("firstName")}
-                style={styles.clearBtnClick}
-              >
+              <TouchableOpacity onPress={() => handleClearField("firstName")} style={styles.clearBtnClick}>
                 <Text style={styles.clearBtnSymbol}>×</Text>
               </TouchableOpacity>
             )}
@@ -290,25 +331,14 @@ export default function PatientRecordsScreen() {
         <View style={styles.fieldWrapper}>
           <Text style={styles.fieldLabelText}>Gender</Text>
           <View style={styles.radioFlexContainer}>
-            <TouchableOpacity
-              style={styles.radioButtonOption}
-              onPress={() => setGender("Male")}
-              activeOpacity={0.8}
-            >
+            <TouchableOpacity style={styles.radioButtonOption} onPress={() => setGender("Male")} activeOpacity={0.8}>
               <View style={[styles.outerRadioRing, gender === "Male" && styles.activeOuterRing]}>
                 {gender === "Male" && <View style={styles.innerRadioDot} />}
               </View>
               <Text style={styles.radioOptionLabelText}>Male</Text>
             </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.radioButtonOption}
-              onPress={() => setGender("Female")}
-              activeOpacity={0.8}
-            >
-              <View
-                style={[styles.outerRadioRing, gender === "Female" && styles.activeOuterRing]}
-              >
+            <TouchableOpacity style={styles.radioButtonOption} onPress={() => setGender("Female")} activeOpacity={0.8}>
+              <View style={[styles.outerRadioRing, gender === "Female" && styles.activeOuterRing]}>
                 {gender === "Female" && <View style={styles.innerRadioDot} />}
               </View>
               <Text style={styles.radioOptionLabelText}>Female</Text>
@@ -319,11 +349,7 @@ export default function PatientRecordsScreen() {
         {/* BIRTHDATE */}
         <View style={styles.fieldWrapper}>
           <Text style={styles.fieldLabelText}>Birthdate</Text>
-          <TouchableOpacity
-            style={styles.inputContainerRow}
-            onPress={() => setShowDatePicker(true)}
-            activeOpacity={0.7}
-          >
+          <TouchableOpacity style={styles.inputContainerRow} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
             <TextInput
               style={styles.fieldInput}
               value={birthdate}
@@ -416,13 +442,31 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#ffffff" },
   scroller: { flex: 1 },
   content: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 40 },
+  searchBarWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f8fafc",
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    height: 48,
+    marginBottom: 16,
+  },
+  searchBarInput: {
+    flex: 1,
+    fontSize: 15,
+    color: "#0f172a",
+    height: "100%",
+  },
   listHeaderRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 25,
+    marginBottom: 16,
   },
   promptHeadline: { fontSize: 20, fontWeight: "700", color: "#1e293b" },
+  patientCount: { fontSize: 16, fontWeight: "500", color: "#64748b" },
   addPatientBtn: {
     backgroundColor: "#095c29",
     paddingVertical: 10,
@@ -446,19 +490,9 @@ const styles = StyleSheet.create({
   cardNameText: { fontSize: 16, fontWeight: "700", color: "#0f172a" },
   cardSubDetails: { fontSize: 14, color: "#64748b" },
   cardActionsGroup: { flexDirection: "row", gap: 8, marginLeft: 12, alignItems: "center" },
-  editButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    backgroundColor: "#e2e8f0",
-  },
+  editButton: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6, backgroundColor: "#e2e8f0" },
   editButtonText: { color: "#334155", fontWeight: "600", fontSize: 13 },
-  deleteButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    backgroundColor: "#fee2e2",
-  },
+  deleteButton: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6, backgroundColor: "#fee2e2" },
   deleteButtonText: { color: "#ef4444", fontWeight: "600", fontSize: 13 },
   fieldWrapper: { marginBottom: 20 },
   fieldLabelText: { fontSize: 15, fontWeight: "600", color: "#475569", marginBottom: 8 },
@@ -476,91 +510,44 @@ const styles = StyleSheet.create({
   clearBtnClick: { padding: 4, justifyContent: "center", alignItems: "center" },
   clearBtnSymbol: { fontSize: 20, color: "#94a3b8" },
   calendarInlineIcon: { fontSize: 18, color: "#94a3b8" },
-  radioFlexContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 28,
-    paddingVertical: 4,
-  },
+  radioFlexContainer: { flexDirection: "row", alignItems: "center", gap: 28, paddingVertical: 4 },
   radioButtonOption: { flexDirection: "row", alignItems: "center", gap: 8 },
   outerRadioRing: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: "#cbd5e1",
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#ffffff",
+    width: 22, height: 22, borderRadius: 11, borderWidth: 2,
+    borderColor: "#cbd5e1", justifyContent: "center", alignItems: "center", backgroundColor: "#ffffff",
   },
   activeOuterRing: { borderColor: "#095c29" },
   innerRadioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#095c29" },
   radioOptionLabelText: { fontSize: 16, color: "#334155", fontWeight: "500" },
   phoneInputLayoutGroup: { flexDirection: "row", alignItems: "center", height: 52 },
   countryCodeBadgePlate: {
-    width: 65,
-    height: "100%",
-    backgroundColor: "#f1f5f9",
-    borderWidth: 1,
-    borderColor: "#cbd5e1",
-    borderTopLeftRadius: 10,
-    borderBottomLeftRadius: 10,
-    borderRightWidth: 0,
-    justifyContent: "center",
-    alignItems: "center",
+    width: 65, height: "100%", backgroundColor: "#f1f5f9",
+    borderWidth: 1, borderColor: "#cbd5e1",
+    borderTopLeftRadius: 10, borderBottomLeftRadius: 10,
+    borderRightWidth: 0, justifyContent: "center", alignItems: "center",
   },
   countryCodeBadgeLabel: { fontSize: 16, color: "#334155", fontWeight: "500" },
   phoneNumberNativeInput: {
-    backgroundColor: "#f8fafc",
-    borderWidth: 1,
-    borderColor: "#cbd5e1",
-    borderTopRightRadius: 10,
-    borderBottomRightRadius: 10,
-    paddingHorizontal: 14,
+    backgroundColor: "#f8fafc", borderWidth: 1, borderColor: "#cbd5e1",
+    borderTopRightRadius: 10, borderBottomRightRadius: 10, paddingHorizontal: 14,
   },
   infoAlertContainerBox: {
-    flexDirection: "row",
-    backgroundColor: "#f0fdf4",
-    borderRadius: 12,
-    padding: 14,
-    gap: 12,
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: "#dcfce7",
+    flexDirection: "row", backgroundColor: "#f0fdf4", borderRadius: 12,
+    padding: 14, gap: 12, marginTop: 12, borderWidth: 1, borderColor: "#dcfce7",
   },
   infoBadgeIndicatorIcon: { fontSize: 18, color: "#095c29", fontWeight: "bold", marginTop: 1 },
   infoAlertContentBodyTextGroup: { flex: 1, gap: 8 },
-  infoAlertMessageTextInline: {
-    fontSize: 14,
-    color: "#166534",
-    lineHeight: 20,
-    fontWeight: "500",
-  },
+  infoAlertMessageTextInline: { fontSize: 14, color: "#166534", lineHeight: 20, fontWeight: "500" },
   infoAlertSubtextInline: { fontSize: 13, color: "#3f6212", lineHeight: 18 },
   bottomActionBarWrapper: {
-    paddingHorizontal: 20,
-    paddingBottom: 24,
-    paddingTop: 12,
-    backgroundColor: "#ffffff",
-    borderTopWidth: 1,
-    borderTopColor: "#f1f5f9",
+    paddingHorizontal: 20, paddingBottom: 24, paddingTop: 12,
+    backgroundColor: "#ffffff", borderTopWidth: 1, borderTopColor: "#f1f5f9",
   },
   nextActionButtonCall: {
-    backgroundColor: "#095c29",
-    height: 54,
-    borderRadius: 10,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#095c29",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 2,
+    backgroundColor: "#095c29", height: 54, borderRadius: 10,
+    justifyContent: "center", alignItems: "center",
+    shadowColor: "#095c29", shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15, shadowRadius: 4, elevation: 2,
   },
-  nextActionButtonLabelText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "700",
-    letterSpacing: 0.5,
-  },
+  nextActionButtonLabelText: { color: "#ffffff", fontSize: 16, fontWeight: "700", letterSpacing: 0.5 },
 });

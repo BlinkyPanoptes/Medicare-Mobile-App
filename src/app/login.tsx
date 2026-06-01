@@ -48,7 +48,7 @@ export default function LoginScreen() {
     try {
       await login(email, password);
       setFailedAttempts(0);
-      router.replace("/dashboard");
+      router.replace("/clinic-selection");
     } catch (error: any) {
       if (error.response) {
         console.log("SERVER REJECTED LOGIN:", error.response.data);
