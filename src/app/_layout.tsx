@@ -1,4 +1,5 @@
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
+import { DarkTheme, DefaultTheme, router, Stack, ThemeProvider } from "expo-router";
+import { useEffect } from "react";
 import { useColorScheme } from "react-native";
 
 import { AnimatedSplashOverlay } from "../components/animated-icon";
@@ -7,7 +8,27 @@ import "../global.css";
 import { AuthProvider, useAuth } from "@/components/context/auth-context";
 
 function RootStack() {
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    if (!user) {
+      router.replace("/login");
+      return;
+    }
+
+    // Admin bypasses clinic selection entirely
+    if (user.role === "admin") {
+      router.replace("/admin-dashboard");
+      return;
+    }
+
+    // Doctor and assistant must select a clinic first
+    router.replace("/clinic-selection");
+  }, [user, isLoading]);
+
+  if (isLoading) return null;
 
   return (
     <Stack>
@@ -19,12 +40,16 @@ function RootStack() {
       />
 
       <Stack.Screen
+        name="clinic-selection"
+        options={{
+          headerShown: false,
+        }}
+      />
+
+      <Stack.Screen
         name="dashboard"
         options={{
-          // Safely updates title dynamically using only the email string
-          title: user
-            ? `Welcome, ${user.role === "doctor" ? "Dr. " : ""}${user.first_name}`
-            : "Welcome",
+          title: "Main Clinic",
           ...headerStyles,
         }}
       />
@@ -44,7 +69,7 @@ function RootStack() {
           ...headerStyles,
         }}
       />
-      
+
       <Stack.Screen
         name="consultations"
         options={{
@@ -53,7 +78,6 @@ function RootStack() {
         }}
       />
 
-      {/* ✅ Added: Register the nested script module route file layout */}
       <Stack.Screen
         name="consultations/newPrescription"
         options={{
@@ -94,7 +118,6 @@ function RootStack() {
         }}
       />
 
-      {/* ✅ Added: Registered the core medical-certificate layout configuration */}
       <Stack.Screen
         name="medical-certificate"
         options={{
