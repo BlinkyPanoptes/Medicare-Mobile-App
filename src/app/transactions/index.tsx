@@ -8,64 +8,180 @@ import {
   View,
 } from "react-native";
 
-import { Transaction } from "@/types/transaction";
+import { Clinic } from "@/types/clinic";
+import { User } from "@/types/user";
 
 // ── Mock Data ─────────────────────────────────────────────────────────────────
+
+const testClinic: Clinic = {
+  id: "1",
+  name: "Crave Medical Center",
+  address: "JS Bldg. Lacson-Galo St., Bacolod City",
+  contactNumber: "09171231234",
+};
+const testUser: User = {
+  id: "1",
+  firstName: "Kenneth",
+  lastName: "Pedrajas",
+  email: "pedkenneth@gmail.com",
+  phoneNumber: "09958533900",
+  role: "doctor",
+  prcNumber: "1234567890", // doctors only
+  specialty: "Pulmonary", // doctors only
+  clinic: testClinic,
+};
+
+import { Patient } from "@/types/patient";
+
+import { Transaction } from "@/types/transaction";
+
+import { Brand } from "@/types/brand";
+import { Generic } from "@/types/generic";
+
+const MOCK_PATIENTS: Patient[] = [
+  {
+    id: "1",
+    createdBy: testUser,
+    lastName: "Soratorio",
+    firstName: "Agnes",
+    gender: "Female",
+    birthdate: new Date("1954-01-25"),
+    email: "agnes.soratorio@example.com",
+    phoneNumber: "09123456789",
+    clinic: testClinic,
+  },
+  {
+    id: "2",
+    createdBy: testUser,
+    lastName: "Dela Cruz",
+    firstName: "Juan",
+    gender: "Male",
+    birthdate: new Date("1990-03-10"),
+    email: "juan.dela.cruz@example.com",
+    phoneNumber: "09234567890",
+    clinic: testClinic,
+  },
+  {
+    id: "3",
+    createdBy: testUser,
+    lastName: "Santos",
+    firstName: "Maria",
+    gender: "Female",
+    birthdate: new Date("1985-07-04"),
+    email: "maria.santos@example.com",
+    phoneNumber: "09345678901",
+    clinic: testClinic,
+  },
+];
+
+const MOCK_GENERICS: Generic[] = [
+  {
+    id: "1",
+    name: "Amoxicillin",
+    uses: "Used to treat bacterial infections such as pneumonia, bronchitis, and urinary tract infections.",
+  },
+  {
+    id: "2",
+    name: "Ibuprofen",
+    uses: "Used to reduce fever and treat pain or inflammation caused by various conditions such as headache, toothache, arthritis, and menstrual cramps.",
+  },
+  {
+    id: "3",
+    name: "Metformin",
+    uses: "Used to treat type 2 diabetes by helping to control blood sugar levels.",
+  },
+];
+
+const MOCK_BRANDS: Brand[] = [
+  { id: "1", generics: [MOCK_GENERICS[0]], name: "Amoxil" },
+  { id: "2", generics: [MOCK_GENERICS[1]], name: "Advil" },
+  { id: "3", generics: [MOCK_GENERICS[2]], name: "Glucophage" },
+];
+
 const MOCK_TRANSACTIONS: Transaction[] = [
   {
     id: "1",
     type: "prescription",
-    dateIssued: "2025-05-01",
-    patient: { firstName: "Agnes", lastName: "Soratorio" },
+    createdBy: testUser,
+    dateIssued: new Date("2025-05-01"),
+    patient: MOCK_PATIENTS[0],
     medications: [
-      { name: "Paracetamol", dosage: "500mg twice daily" },
-      { name: "Amoxicillin", dosage: "250mg three times daily" },
+      {
+        generic: MOCK_GENERICS[0],
+        brand: MOCK_BRANDS[0],
+        dosage: "500mg every 8 hours for 7 days",
+      },
     ],
     notes: "Take with food. Complete the full antibiotic course.",
   },
   {
     id: "2",
     type: "medical-certificate",
-    dateIssued: "2025-05-03",
-    patient: { firstName: "Juan", lastName: "Dela Cruz" },
-    medicalNotes:
+    createdBy: testUser,
+    dateIssued: new Date("2025-05-03"),
+    patient: MOCK_PATIENTS[1],
+    complaints:
+      "Patient presented with symptoms of acute bronchitis, including persistent cough, mild fever, and fatigue.",
+    diagnosis: "Acute Bronchitis",
+    recommendation:
       "Patient is cleared to return to work. No physical restrictions.",
   },
   {
     id: "3",
     type: "prescription",
-    dateIssued: "2025-05-10",
-    patient: { firstName: "Maria", lastName: "Santos" },
-    medications: [{ name: "Ibuprofen", dosage: "400mg as needed" }],
+    createdBy: testUser,
+    dateIssued: new Date("2025-05-10"),
+    patient: MOCK_PATIENTS[2],
+    medications: [
+      {
+        generic: MOCK_GENERICS[1],
+        brand: MOCK_BRANDS[1],
+        dosage: "400mg every 6 hours as needed for pain",
+      },
+    ],
     notes: "Avoid on empty stomach.",
   },
   {
     id: "4",
     type: "medical-certificate",
-    dateIssued: "2025-05-15",
-    patient: { firstName: "Agnes", lastName: "Soratorio" },
-    medicalNotes:
-      "Patient diagnosed with mild hypertension. Advised lifestyle changes.",
+    createdBy: testUser,
+    dateIssued: new Date("2025-05-15"),
+    patient: MOCK_PATIENTS[0],
+    complaints:
+      "Patient presented with symptoms of acute bronchitis, including persistent cough, mild fever, and fatigue.",
+    diagnosis: "Acute Bronchitis",
+    recommendation:
+      "Patient is cleared to return to work. No physical restrictions.",
   },
   {
     id: "5",
     type: "prescription",
-    dateIssued: "2025-05-20",
-    patient: { firstName: "Carlos", lastName: "Reyes" },
+    createdBy: testUser,
+    dateIssued: new Date("2025-05-20"),
+    patient: MOCK_PATIENTS[1],
     medications: [
-      { name: "Metformin", dosage: "500mg once daily" },
-      { name: "Cetirizine", dosage: "10mg at bedtime" },
+      {
+        generic: MOCK_GENERICS[2],
+        brand: MOCK_BRANDS[2],
+        dosage: "850mg twice daily with meals",
+      },
+      {
+        generic: MOCK_GENERICS[0],
+        brand: MOCK_BRANDS[0],
+        dosage: "500mg every 8 hours for 7 days",
+      },
     ],
     notes: "Monitor blood sugar weekly.",
   },
 ];
 
+// ── End of Mock Data
+
 // ── Filter Types ──────────────────────────────────────────────────────────────
 type TypeFilter = "all" | "prescription" | "medical-certificate";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const formatDate = (iso: string) => {
-  const date = new Date(iso);
+const formatDate = (date: Date) => {
   return date.toLocaleDateString("en-US", {
     month: "long",
     day: "numeric",
@@ -93,7 +209,7 @@ export default function TransactionsScreen() {
         if (typeFilter !== "all" && t.type !== typeFilter) return false;
 
         // Filter by date (partial match — e.g. "2025-05" matches all of May)
-        if (date && !t.dateIssued.includes(date)) return false;
+        if (date && !t.dateIssued.toISOString().includes(date)) return false;
 
         // Filter by patient name search
         if (query && !getPatientFullName(t).includes(query)) return false;
@@ -243,9 +359,10 @@ export default function TransactionsScreen() {
                 <>
                   <View style={styles.divider} />
                   <Text style={styles.detailLabel}>Medications</Text>
-                  {transaction.medications.map((med, i) => (
+                  {transaction.medications.map((medications, i) => (
                     <Text key={i} style={styles.detailText}>
-                      • {med.name} — {med.dosage}
+                      • {medications.generic.name} ({medications.brand.name}) —{" "}
+                      {medications.dosage}
                     </Text>
                   ))}
                   {transaction.notes ? (
@@ -261,9 +378,17 @@ export default function TransactionsScreen() {
               {transaction.type === "medical-certificate" && (
                 <>
                   <View style={styles.divider} />
-                  <Text style={styles.detailLabel}>Medical Notes</Text>
+                  <Text style={styles.detailLabel}>Complaints</Text>
                   <Text style={styles.detailText}>
-                    {transaction.medicalNotes}
+                    {transaction.complaints}
+                  </Text>
+
+                  <Text style={styles.detailLabel}>Diagnosis</Text>
+                  <Text style={styles.detailText}>{transaction.diagnosis}</Text>
+
+                  <Text style={styles.detailLabel}>Recommendation</Text>
+                  <Text style={styles.detailText}>
+                    {transaction.recommendation}
                   </Text>
                 </>
               )}

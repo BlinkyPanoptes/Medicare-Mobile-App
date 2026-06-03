@@ -19,16 +19,12 @@ function RootStack() {
       />
 
       <Stack.Screen
-        name="clinic-selection"
-        options={{
-          headerShown: false,
-        }}
-      />
-
-      <Stack.Screen
         name="dashboard"
         options={{
-          title: "Main Clinic",
+          // Safely updates title dynamically using only the email string
+          title: user
+            ? `Welcome, ${user.role === "doctor" ? "Dr. " : ""}${user.firstName}`
+            : "Welcome",
           ...headerStyles,
         }}
       />
@@ -57,6 +53,7 @@ function RootStack() {
         }}
       />
 
+      {/* ✅ Added: Register the nested script module route file layout */}
       <Stack.Screen
         name="consultations/newPrescription"
         options={{
@@ -97,6 +94,7 @@ function RootStack() {
         }}
       />
 
+      {/* ✅ Added: Registered the core medical-certificate layout configuration */}
       <Stack.Screen
         name="medical-certificate"
         options={{

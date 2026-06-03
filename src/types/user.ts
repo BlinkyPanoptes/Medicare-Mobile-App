@@ -1,3 +1,5 @@
+import { Clinic } from "./clinic";
+
 export type UserRole = "doctor" | "assistant" | "admin";
 
 export interface User {
@@ -9,11 +11,5 @@ export interface User {
   role: UserRole;
   prcNumber?: string; // doctors only
   specialty?: string; // doctors only
-  clinic?: {
-    name: string;
-    room: string;
-    city: string;
-    province: string;
-    contactNumber: string;
-  };
+  clinic?: Clinic;
 }

@@ -9,7 +9,11 @@ import {
   View,
 } from "react-native";
 
+import {
+  MOCK_DISEASES
+} from "@/mocks";
 import { Disease } from "@/types/disease";
+const testDiseases = MOCK_DISEASES;
 
 export default function DiseasesScreen() {
   const [isCreating, setIsCreating] = useState(false);
@@ -20,14 +24,8 @@ export default function DiseasesScreen() {
   const [symptoms, setSymptoms] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [diseaseDatabase, setDiseaseDatabase] = useState<Disease[]>([
-    {
-      id: "1",
-      name: "Influenza",
-      symptoms:
-        "Fever, chills, muscle aches, cough, congestion, runny nose, headaches, fatigue",
-    },
-  ]);
+  const [diseaseDatabase, setDiseaseDatabase] =
+    useState<Disease[]>(testDiseases);
 
   const filteredDiseases = useMemo(
     () =>
