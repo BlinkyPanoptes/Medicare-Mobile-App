@@ -164,6 +164,7 @@ export default function PatientRecordsScreen() {
           { text: "OK", onPress: () => { setIsCreating(false); loadPatients(); } },
         ]);
       }
+      await loadPatients();
     } catch (err: any) {
       const serverMessage =
         err?.response?.data?.message || (Object.values(err?.response?.data?.errors ?? {}) as string[][])?.[0]?.[0] ||
@@ -307,7 +308,10 @@ export default function PatientRecordsScreen() {
               placeholderTextColor="#94a3b8"
             />
             {lastName.length > 0 && (
-              <TouchableOpacity onPress={() => handleClearField("lastName")} style={styles.clearBtnClick}>
+              <TouchableOpacity
+                onPress={() => handleClearField("lastName")}
+                style={styles.clearBtnClick}
+              >
                 <Text style={styles.clearBtnSymbol}>×</Text>
               </TouchableOpacity>
             )}
@@ -326,7 +330,10 @@ export default function PatientRecordsScreen() {
               placeholderTextColor="#94a3b8"
             />
             {firstName.length > 0 && (
-              <TouchableOpacity onPress={() => handleClearField("firstName")} style={styles.clearBtnClick}>
+              <TouchableOpacity
+                onPress={() => handleClearField("firstName")}
+                style={styles.clearBtnClick}
+              >
                 <Text style={styles.clearBtnSymbol}>×</Text>
               </TouchableOpacity>
             )}
