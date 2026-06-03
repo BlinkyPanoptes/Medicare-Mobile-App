@@ -1,27 +1,22 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, StatusBar, Image } from 'react-native';
-import { useRouter, Stack } from 'expo-router';
+import { Clinic } from '@/types/clinic';
+import { Stack, useRouter } from 'expo-router';
+import { Image, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-const CLINICS = [
-  { id: '1', name: 'Main Clinic', address: 'Primary Branch', isAvailable: true },
-  { id: '2', name: 'Second Branch', address: 'Coming Soon', isAvailable: false },
-  { id: '3', name: 'Third Branch', address: 'Coming Soon', isAvailable: false },
-];
+import { useAuth } from '@/components/context/auth-context';
 
 export default function ClinicSelectionScreen() {
   const router = useRouter();
+  const { clinics, selectClinic, user } = useAuth();
 
-  const handleSelectClinic = (clinic: any) => {
-    if (!clinic.isAvailable) {
-      Alert.alert("Coming Soon", "This clinic branch is not yet active.");
-      return;
-    }
-    router.replace("/dashboard");
-  };
+  const handleSelectClinic = async (clinic: Clinic) => {
+  await selectClinic(clinic);
+  // Both doctor and assistant land on dashboard
+  // (dashboard already filters buttons by role)
+  router.replace("/dashboard");
+};
 
   return (
     <>
-      {/* Hides the expo-router header for this screen */}
       <Stack.Screen options={{ headerShown: false }} />
 
       <View style={styles.container}>
@@ -42,34 +37,26 @@ export default function ClinicSelectionScreen() {
           <Text style={styles.subTitle}>Choose your assigned clinic branch to proceed.</Text>
 
           <View style={styles.clinicList}>
-            {CLINICS.map((clinic) => (
+            {clinics.map((clinic) => (
               <TouchableOpacity
                 key={clinic.id}
-                style={[styles.card, !clinic.isAvailable && styles.cardDisabled]}
+                style={styles.card}
                 onPress={() => handleSelectClinic(clinic)}
-                activeOpacity={clinic.isAvailable ? 0.75 : 1}
+                activeOpacity={0.75}
               >
-                <View style={[styles.cardAccentBar, !clinic.isAvailable && styles.cardAccentBarDisabled]} />
+                <View style={styles.cardAccentBar} />
 
                 <View style={styles.cardBody}>
                   <View style={styles.cardTextGroup}>
-                    <Text style={[styles.cardNameText, !clinic.isAvailable && styles.cardNameDisabled]}>
-                      {clinic.name}
-                    </Text>
-                    <Text style={[styles.cardAddress, !clinic.isAvailable && styles.cardAddressDisabled]}>
-                      {clinic.address}
-                    </Text>
+                    <Text style={styles.cardNameText}>{clinic.clinic_name}</Text>
+                    {clinic.address && (
+                      <Text style={styles.cardAddress}>{clinic.address}</Text>
+                    )}
                   </View>
 
-                  {clinic.isAvailable ? (
-                    <View style={styles.statusBadgeActive}>
-                      <Text style={styles.statusBadgeActiveText}>Available</Text>
-                    </View>
-                  ) : (
-                    <View style={styles.statusBadgeDisabled}>
-                      <Text style={styles.statusBadgeDisabledText}>Coming Soon</Text>
-                    </View>
-                  )}
+                  <View style={styles.statusBadgeActive}>
+                    <Text style={styles.statusBadgeActiveText}>Available</Text>
+                  </View>
                 </View>
               </TouchableOpacity>
             ))}
@@ -90,7 +77,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#095c29",
   },
   headerBanner: {
-    flex: 2,        
+    flex: 2,
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 40,
@@ -138,16 +125,9 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  cardDisabled: {
-    backgroundColor: "#f8fafc",
-    opacity: 0.65,
-  },
   cardAccentBar: {
     width: 5,
     backgroundColor: "#095c29",
-  },
-  cardAccentBarDisabled: {
-    backgroundColor: "#cbd5e1",
   },
   cardBody: {
     flex: 1,
@@ -166,15 +146,9 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#0f172a",
   },
-  cardNameDisabled: {
-    color: "#94a3b8",
-  },
   cardAddress: {
     fontSize: 13,
     color: "#64748b",
-  },
-  cardAddressDisabled: {
-    color: "#b0bac9",
   },
   statusBadgeActive: {
     backgroundColor: "#dcfce7",
@@ -186,17 +160,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     color: "#095c29",
-  },
-  statusBadgeDisabled: {
-    backgroundColor: "#f1f5f9",
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-  },
-  statusBadgeDisabledText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#94a3b8",
   },
   footerNote: {
     fontSize: 12,

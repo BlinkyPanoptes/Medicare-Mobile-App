@@ -1,6 +1,7 @@
 import { useAuth } from "@/components/context/auth-context";
 import { ButtonCard, Card } from "@/components/ui";
 import { theme } from "@/theme";
+import { Clinic } from "@/types/clinic";
 import { UserRole } from "@/types/user";
 import { router } from "expo-router";
 import { useState } from "react";
@@ -32,29 +33,23 @@ type ButtonItem = {
   allowedRoles?: UserRole[];
 };
 
-const CLINICS = [
-  { id: '1', name: 'Main Clinic', address: 'Primary Branch', isAvailable: true },
-  { id: '2', name: 'Second Branch', address: 'Coming Soon', isAvailable: false },
-  { id: '3', name: 'Third Branch', address: 'Coming Soon', isAvailable: false },
-];
-
 export default function Dashboard() {
   const { width } = useWindowDimensions();
-  const { user, logout } = useAuth();
+  // FIX: pull clinics, activeClinic, selectClinic from context — remove local CLINICS array
+  const { user, logout, clinics, activeClinic, selectClinic } = useAuth();
 
   const [clinicModalVisible, setClinicModalVisible] = useState(false);
-  const [selectedClinicId, setSelectedClinicId] = useState('1');
 
-  const handleLogout = () => {
-    logout();
+  // FIX: logout is async — must be awaited
+  const handleLogout = async () => {
+    await logout();
     router.replace("/login");
   };
 
-  const handleSelectClinic = (clinic: typeof CLINICS[0]) => {
-    if (!clinic.isAvailable) {
-      return; // do nothing for unavailable — badge already signals it
-    }
-    setSelectedClinicId(clinic.id);
+  // FIX: call selectClinic from context instead of setting local state
+  // All clinics from backend are valid — no isAvailable check needed
+  const handleSelectClinic = async (clinic: Clinic) => {
+    await selectClinic(clinic);
     setClinicModalVisible(false);
   };
 
@@ -126,15 +121,11 @@ export default function Dashboard() {
   const filterByRole = (btn: ButtonItem) => {
     if (!btn.allowedRoles) return true;
     if (!user) return false;
-    return btn.allowedRoles.includes(
-      btn.allowedRoles.includes(user.role) ? user.role : (user.role as any),
-    );
+    return btn.allowedRoles.includes(user.role);
   };
 
   const filteredClinicButtons = clinicButtons.filter(filterByRole);
   const filteredDrugButtons = drugButtons.filter(filterByRole);
-
-  const activeClinic = CLINICS.find(c => c.id === selectedClinicId) ?? CLINICS[0];
 
   return (
     <>
@@ -147,25 +138,28 @@ export default function Dashboard() {
         <View style={styles.header}>
           <View style={{ flex: 1, marginRight: 12 }}>
             <Text style={styles.greeting}>
-              Good Day, {user ? `Dr. ${user.first_name}` : "Staff"}! 👋
+              Good Day, {user ? (user.role === "doctor" ? `Dr. ${user.first_name}` : user.first_name) : "Staff"}! 👋
             </Text>
-            <Text style={styles.title}>{activeClinic.name}</Text>
+            {/* FIX: was activeClinic.name from local state — now from context */}
+            <Text style={styles.title}>{activeClinic?.clinic_name ?? "Select a Clinic"}</Text>
           </View>
 
-          {/* CLINIC SWITCHER BUTTON */}
-          <TouchableOpacity
-            style={styles.clinicSwitcherBtn}
-            onPress={() => setClinicModalVisible(true)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.clinicSwitcherIcon}>🏥</Text>
-            <View style={styles.clinicSwitcherTextGroup}>
-              <Text style={styles.clinicSwitcherLabel} numberOfLines={1}>
-                {activeClinic.name}
-              </Text>
-              <Text style={styles.clinicSwitcherSub}>Tap to switch</Text>
-            </View>
-          </TouchableOpacity>
+          {/* CLINIC SWITCHER BUTTON — only show if user has more than one clinic */}
+          {clinics.length > 1 && (
+            <TouchableOpacity
+              style={styles.clinicSwitcherBtn}
+              onPress={() => setClinicModalVisible(true)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.clinicSwitcherIcon}>🏥</Text>
+              <View style={styles.clinicSwitcherTextGroup}>
+                <Text style={styles.clinicSwitcherLabel} numberOfLines={1}>
+                  {activeClinic?.clinic_name ?? "Select"}
+                </Text>
+                <Text style={styles.clinicSwitcherSub}>Tap to switch</Text>
+              </View>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* WELCOME CARD */}
@@ -232,65 +226,52 @@ export default function Dashboard() {
         animationType="slide"
         onRequestClose={() => setClinicModalVisible(false)}
       >
-        {/* Dim backdrop — tap to dismiss */}
         <Pressable style={styles.modalBackdrop} onPress={() => setClinicModalVisible(false)}>
-          {/* Stop tap propagation on the sheet itself */}
           <Pressable style={styles.modalSheet} onPress={() => {}}>
 
-            {/* Sheet handle */}
             <View style={styles.sheetHandle} />
 
             <Text style={styles.modalTitle}>Switch Clinic</Text>
             <Text style={styles.modalSubtitle}>Select your active branch for this session.</Text>
 
             <View style={styles.modalClinicList}>
-              {CLINICS.map((clinic) => {
-                const isSelected = clinic.id === selectedClinicId;
+              {/* FIX: map over real clinics from context — no isAvailable logic */}
+              {clinics.map((clinic) => {
+                const isSelected = clinic.id === activeClinic?.id;
                 return (
                   <TouchableOpacity
                     key={clinic.id}
                     style={[
                       styles.modalCard,
                       isSelected && styles.modalCardSelected,
-                      !clinic.isAvailable && styles.modalCardDisabled,
                     ]}
                     onPress={() => handleSelectClinic(clinic)}
-                    activeOpacity={clinic.isAvailable ? 0.75 : 1}
+                    activeOpacity={0.75}
                   >
-                    {/* Accent bar */}
                     <View style={[
                       styles.modalCardAccent,
-                      isSelected ? styles.modalCardAccentSelected : null,
-                      !clinic.isAvailable ? styles.modalCardAccentDisabled : null,
+                      isSelected && styles.modalCardAccentSelected,
                     ]} />
 
                     <View style={styles.modalCardBody}>
                       <View style={{ flex: 1 }}>
-                        <Text style={[
-                          styles.modalCardName,
-                          !clinic.isAvailable && styles.modalCardNameDisabled,
-                        ]}>
-                          {clinic.name}
+                        <Text style={styles.modalCardName}>
+                          {clinic.clinic_name}
                         </Text>
-                        <Text style={[
-                          styles.modalCardAddress,
-                          !clinic.isAvailable && styles.modalCardAddressDisabled,
-                        ]}>
-                          {clinic.address}
-                        </Text>
+                        {clinic.address && (
+                          <Text style={styles.modalCardAddress}>
+                            {clinic.address}
+                          </Text>
+                        )}
                       </View>
 
                       {isSelected ? (
                         <View style={styles.badgeActive}>
                           <Text style={styles.badgeActiveText}>Active</Text>
                         </View>
-                      ) : clinic.isAvailable ? (
+                      ) : (
                         <View style={styles.badgeAvailable}>
                           <Text style={styles.badgeAvailableText}>Switch</Text>
-                        </View>
-                      ) : (
-                        <View style={styles.badgeDisabled}>
-                          <Text style={styles.badgeDisabledText}>Coming Soon</Text>
                         </View>
                       )}
                     </View>
@@ -337,8 +318,6 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: theme.colors.text,
   },
-
-  // --- CLINIC SWITCHER BUTTON ---
   clinicSwitcherBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -367,8 +346,6 @@ const styles = StyleSheet.create({
     color: "#4ade80",
     marginTop: 1,
   },
-
-  // --- CARDS & SECTIONS (unchanged) ---
   welcomeCard: {
     backgroundColor: theme.colors.primary,
     borderRadius: 22,
@@ -425,8 +402,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
   },
-
-  // --- MODAL ---
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.45)",
@@ -479,18 +454,12 @@ const styles = StyleSheet.create({
     borderColor: "#095c29",
     backgroundColor: "#f0fdf4",
   },
-  modalCardDisabled: {
-    opacity: 0.55,
-  },
   modalCardAccent: {
     width: 5,
     backgroundColor: "#cbd5e1",
   },
   modalCardAccentSelected: {
     backgroundColor: "#095c29",
-  },
-  modalCardAccentDisabled: {
-    backgroundColor: "#e2e8f0",
   },
   modalCardBody: {
     flex: 1,
@@ -506,15 +475,9 @@ const styles = StyleSheet.create({
     color: "#0f172a",
     marginBottom: 3,
   },
-  modalCardNameDisabled: {
-    color: "#94a3b8",
-  },
   modalCardAddress: {
     fontSize: 13,
     color: "#64748b",
-  },
-  modalCardAddressDisabled: {
-    color: "#b0bac9",
   },
   badgeActive: {
     backgroundColor: "#095c29",
@@ -537,17 +500,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     color: "#095c29",
-  },
-  badgeDisabled: {
-    backgroundColor: "#f1f5f9",
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-  },
-  badgeDisabledText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#94a3b8",
   },
   modalDismissBtn: {
     marginTop: 16,

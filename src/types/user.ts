@@ -3,13 +3,12 @@ import { Clinic } from "./clinic";
 export type UserRole = "doctor" | "assistant" | "admin";
 
 export interface User {
-  id: string;
-  firstName: string;
-  lastName: string;
+  id: number;
+  first_name: string;
+  last_name: string;
   email: string;
-  phoneNumber: string;
+  phone_number: string;
   role: UserRole;
-  prcNumber?: string; // doctors only
-  specialty?: string; // doctors only
-  clinic?: Clinic;
+  prc_id?: string;    // doctors only
+  clinics: Clinic[];  // user can belong to multiple clinics
 }

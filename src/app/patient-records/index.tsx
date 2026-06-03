@@ -1,7 +1,7 @@
 import { createPatient, deletePatient, fetchPatients, updatePatient } from "@/api/patient";
 import { useAuth } from "@/components/context/auth-context";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Platform,
@@ -15,7 +15,7 @@ import {
 } from "react-native";
 
 type PatientRecord = {
-  id: string;
+  id: number;
   lastName: string;
   firstName: string;
   gender: "Male" | "Female";
@@ -25,10 +25,10 @@ type PatientRecord = {
 };
 
 export default function PatientRecordsScreen() {
-  const { user } = useAuth();
+  const { user, activeClinic } = useAuth();
 
   const [isCreating, setIsCreating] = useState(false);
-  const [editingPatientId, setEditingPatientId] = useState<string | null>(null);
+  const [editingPatientId, setEditingPatientId] = useState<number | null>(null);
   const [patientDatabase, setPatientDatabase] = useState<PatientRecord[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState(""); // ✅ single declaration, inside component
@@ -53,10 +53,10 @@ export default function PatientRecordsScreen() {
       // Collect all pages if paginated, or just use .data.data
       const apiData = response.data.data || [];
       const formattedData = apiData.map((p: any) => ({
-        id: p.id.toString(),
+        id: p.id,
         lastName: p.last_name,
         firstName: p.first_name,
-        gender: p.gender ?? "",
+        gender: p.gender ? (p.gender.charAt(0).toUpperCase() + p.gender.slice(1)) as "Male" | "Female" : "Female",
         birthdate: p.birthdate,
         email: p.email ?? "",
         mobileNumber: p.phone_number ?? "",
@@ -134,16 +134,23 @@ export default function PatientRecordsScreen() {
       return;
     }
 
+    if (!activeClinic) {
+      Alert.alert("No Clinic Selected", "Please select a clinic before adding a patient.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     const payload = {
       last_name: lastName,
       first_name: firstName,
-      gender,
+      gender: gender.toLowerCase(),
       birthdate,
       email,
       phone_number: mobileNumber,
+      clinic_id: activeClinic?.id,
     };
+    console.log("PAYLOAD:", JSON.stringify(payload));
 
     try {
       if (editingPatientId) {
@@ -159,8 +166,7 @@ export default function PatientRecordsScreen() {
       }
     } catch (err: any) {
       const serverMessage =
-        err?.response?.data?.message ||
-        Object.values(err?.response?.data?.errors ?? {})?.[0]?.[0] ||
+        err?.response?.data?.message || (Object.values(err?.response?.data?.errors ?? {}) as string[][])?.[0]?.[0] ||
         "Failed to communicate with the server.";
       Alert.alert("Submission Error", serverMessage);
     } finally {
@@ -168,7 +174,7 @@ export default function PatientRecordsScreen() {
     }
   };
 
-  const handleDeletePatient = (id: string, name: string) => {
+  const handleDeletePatient = (patientId: number, name: string) => {
     Alert.alert(
       "Delete Patient",
       `Are you sure you want to permanently remove the file records for ${name}?`,
@@ -179,7 +185,7 @@ export default function PatientRecordsScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              await deletePatient(id);
+              await deletePatient(patientId);
               await loadPatients();
             } catch (err) {
               Alert.alert("Error", "Could not delete patient. Please try again.");

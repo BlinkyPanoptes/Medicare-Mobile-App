@@ -1,4 +1,5 @@
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
+import { DarkTheme, DefaultTheme, router, Stack, ThemeProvider } from "expo-router";
+import { useEffect } from "react";
 import { useColorScheme } from "react-native";
 
 import { AnimatedSplashOverlay } from "../components/animated-icon";
@@ -7,7 +8,27 @@ import "../global.css";
 import { AuthProvider, useAuth } from "@/components/context/auth-context";
 
 function RootStack() {
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    if (!user) {
+      router.replace("/login");
+      return;
+    }
+
+    // Admin bypasses clinic selection entirely
+    if (user.role === "admin") {
+      router.replace("/admin-dashboard");
+      return;
+    }
+
+    // Doctor and assistant must select a clinic first
+    router.replace("/clinic-selection");
+  }, [user, isLoading]);
+
+  if (isLoading) return null;
 
   return (
     <Stack>

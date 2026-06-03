@@ -1,6 +1,7 @@
 export interface Clinic {
-  id: string;
-  name: string;
-  address: string;
-  contactNumber: string;
+  id: number;
+  clinic_name: string;
+  doctor_id: number | null;
+  address: string | null;
+  phone_number: string | null;
 }
