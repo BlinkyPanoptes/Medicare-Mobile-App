@@ -5,6 +5,8 @@ import axios from "axios";
 import * as SecureStore from "expo-secure-store";
 import React, { createContext, useContext, useEffect, useState } from "react";
 
+
+
 interface AuthContextType {
   token: string | null;
   user: User | null;
