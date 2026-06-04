@@ -21,11 +21,11 @@ const buttons: PrescriptionButton[] = [
     description: "Create a new medication order",
     onPress: () => router.push("/consultations/newPrescription"),
   },
-  {
+   {
     label: "Represcribe",
     icon: "🔄",
     description: "Reissue a previous prescription",
-    onPress: () => {},
+    onPress: () => router.push("/consultations/rePrescribe"),
   },
   {
     label: "Templates",

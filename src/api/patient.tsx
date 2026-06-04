@@ -4,3 +4,4 @@ export const fetchPatients  = ()                       => apiClient.get("/patien
 export const createPatient  = (data: any)              => apiClient.post("/patients", data);
 export const updatePatient  = (id: number, data: any)  => apiClient.put(`/patients/${id}`, data);
 export const deletePatient  = (id: number)             => apiClient.delete(`/patients/${id}`);
+export const fetchPatientById = (id: string | number) => apiClient.get(`/patients/${id}`);

@@ -1,51 +1,59 @@
-import { useEffect, useState } from 'react';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { fetchPatientById } from '@/api/patient';
+import { fetchPatientConsultations } from "@/api/consultation";
+import { fetchPatientById } from "@/api/patient";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import {
-  View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, ActivityIndicator, Alert
-} from 'react-native';
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
-// Mock prescriptions — replace with real API call once consultations endpoint is ready
-const MOCK_PRESCRIPTIONS = [
-  {
-    id: '1',
-    date: '2025-05-20',
-    medications: [
-      'Metformin (Glucophage) — 850mg twice daily with meals',
-      'Amoxicillin (Amoxil) — 500mg every 8 hours for 7 days',
-    ],
-    notes: 'Monitor blood sugar weekly.',
-  },
-  {
-    id: '2',
-    date: '2025-03-10',
-    medications: ['Losartan — 50mg once daily'],
-    notes: 'Follow up in 1 month.',
-  },
-];
+type Consultation = {
+  id: number;
+  consultation_date: string;
+  chief_complaint: string | null;
+  notes: string | null;
+  prescriptions: {
+    id: number;
+    dosage: string;
+    frequency: string;
+    duration: string;
+    instructions: string | null;
+    generic: { id: number; generic_name: string };
+    brand: { id: number; brand_name: string };
+  }[];
+};
 
 export default function PatientDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
 
   const [patient, setPatient] = useState<any>(null);
+  const [consultations, setConsultations] = useState<Consultation[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!id) return;
-    const loadPatient = async () => {
+    const load = async () => {
       try {
-        const response = await fetchPatientById(id);
-        setPatient(response.data.data || response.data);
-      } catch (error) {
+        const [patientRes, consultRes] = await Promise.all([
+          fetchPatientById(id),
+          fetchPatientConsultations(Number(id)),
+        ]);
+        setPatient(patientRes.data.data || patientRes.data);
+        const data = consultRes.data.data || [];
+        setConsultations(data);
+      } catch {
         Alert.alert("Error", "Could not load patient details.");
-        console.error(error);
       } finally {
         setLoading(false);
       }
     };
-    loadPatient();
+    load();
   }, [id]);
 
   if (loading) {
@@ -68,7 +76,7 @@ export default function PatientDetailsScreen() {
     );
   }
 
-  const latestPrescription = MOCK_PRESCRIPTIONS[0] ?? null;
+  const latestConsultation = consultations[0] ?? null;
 
   return (
     <View style={styles.container}>
@@ -80,29 +88,45 @@ export default function PatientDetailsScreen() {
             {(patient.last_name?.[0] ?? "").toUpperCase()}
           </Text>
         </View>
-        <Text style={styles.patientFullName}>{patient.first_name} {patient.last_name}</Text>
-        <Text style={styles.patientSubInfo}>{patient.gender ?? "—"} • {patient.birthdate ?? "—"}</Text>
+        <Text style={styles.patientFullName}>
+          {patient.first_name} {patient.last_name}
+        </Text>
+        <Text style={styles.patientSubInfo}>
+          {patient.gender
+            ? patient.gender.charAt(0).toUpperCase() + patient.gender.slice(1)
+            : "—"}{" "}
+          • {patient.birthdate ?? "—"}
+        </Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-
         {/* CONTACT INFO */}
         <Text style={styles.sectionTitle}>Contact Information</Text>
         <DetailField label="Email Address" value={patient.email || "N/A"} />
-        <DetailField label="Mobile Number" value={patient.phone_number ? `+63 ${patient.phone_number}` : "N/A"} />
+        <DetailField
+          label="Mobile Number"
+          value={patient.phone_number ? `+63 ${patient.phone_number}` : "N/A"}
+        />
 
         {/* PERSONAL INFO */}
         <Text style={styles.sectionTitle}>Personal Information</Text>
         <DetailField label="Last Name" value={patient.last_name} />
         <DetailField label="First Name" value={patient.first_name} />
-        <DetailField label="Gender" value={patient.gender ? patient.gender.charAt(0).toUpperCase() + patient.gender.slice(1) : "N/A"} />
+        <DetailField
+          label="Gender"
+          value={
+            patient.gender
+              ? patient.gender.charAt(0).toUpperCase() + patient.gender.slice(1)
+              : "N/A"
+          }
+        />
         <DetailField label="Birthdate" value={patient.birthdate} />
 
-        {/* PRESCRIPTION HISTORY */}
+        {/* LATEST PRESCRIPTION */}
         <View style={styles.sectionDivider} />
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>Latest Prescription</Text>
-          {MOCK_PRESCRIPTIONS.length > 0 && (
+          {consultations.length > 0 && (
             <TouchableOpacity
               style={styles.viewAllBtn}
               onPress={() => router.push(`/patient-records/${id}/prescriptions`)}
@@ -112,27 +136,42 @@ export default function PatientDetailsScreen() {
           )}
         </View>
 
-        {latestPrescription ? (
+        {latestConsultation && latestConsultation.prescriptions?.length > 0 ? (
           <View style={styles.prescriptionCard}>
-            {/* Card header */}
             <View style={styles.prescriptionCardHeader}>
               <View style={styles.prescriptionBadge}>
                 <Text style={styles.prescriptionBadgeText}>💊 Prescription</Text>
               </View>
-              <Text style={styles.prescriptionDate}>{latestPrescription.date}</Text>
+              <Text style={styles.prescriptionDate}>
+                {latestConsultation.consultation_date?.split("T")[0]}
+              </Text>
             </View>
 
-            {/* Medications */}
             <Text style={styles.prescriptionSectionLabel}>MEDICATIONS</Text>
-            {latestPrescription.medications.map((med, i) => (
-              <Text key={i} style={styles.prescriptionMedItem}>• {med}</Text>
+            {latestConsultation.prescriptions.map((rx) => (
+              <Text key={rx.id} style={styles.prescriptionMedItem}>
+                • {rx.brand.brand_name} ({rx.generic.generic_name}) — {rx.dosage},{" "}
+                {rx.frequency} for {rx.duration}
+              </Text>
             ))}
 
-            {/* Notes */}
-            {latestPrescription.notes ? (
+            {latestConsultation.chief_complaint ? (
               <>
-                <Text style={[styles.prescriptionSectionLabel, { marginTop: 10 }]}>NOTES</Text>
-                <Text style={styles.prescriptionNotes}>{latestPrescription.notes}</Text>
+                <Text style={[styles.prescriptionSectionLabel, { marginTop: 10 }]}>
+                  CHIEF COMPLAINT
+                </Text>
+                <Text style={styles.prescriptionNotes}>
+                  {latestConsultation.chief_complaint}
+                </Text>
+              </>
+            ) : null}
+
+            {latestConsultation.notes ? (
+              <>
+                <Text style={[styles.prescriptionSectionLabel, { marginTop: 10 }]}>
+                  NOTES
+                </Text>
+                <Text style={styles.prescriptionNotes}>{latestConsultation.notes}</Text>
               </>
             ) : null}
           </View>
@@ -142,7 +181,6 @@ export default function PatientDetailsScreen() {
             <Text style={styles.emptyHistoryText}>No prescription history found.</Text>
           </View>
         )}
-
       </ScrollView>
     </View>
   );
@@ -164,27 +202,21 @@ const styles = StyleSheet.create({
   notFoundText: { fontSize: 16, color: "#64748b" },
   backBtnFallback: { marginTop: 8 },
   backBtnFallbackText: { color: "#095c29", fontWeight: "600", fontSize: 15 },
-
   profileBanner: { backgroundColor: "#095c29", alignItems: "center", paddingTop: 28, paddingBottom: 32, paddingHorizontal: 24 },
   avatarCircle: { width: 72, height: 72, borderRadius: 36, backgroundColor: "rgba(255,255,255,0.2)", justifyContent: "center", alignItems: "center", marginBottom: 12, borderWidth: 2, borderColor: "rgba(255,255,255,0.4)" },
   avatarInitials: { fontSize: 26, fontWeight: "700", color: "#ffffff" },
   patientFullName: { fontSize: 22, fontWeight: "700", color: "#ffffff", marginBottom: 4 },
   patientSubInfo: { fontSize: 14, color: "#bbf7d0" },
-
   content: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 40 },
   sectionHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
   sectionTitle: { fontSize: 16, fontWeight: "700", color: "#095c29", marginTop: 8 },
   sectionDivider: { height: 1, backgroundColor: "#e2e8f0", marginVertical: 20 },
-
   viewAllBtn: { paddingVertical: 4, paddingHorizontal: 10, backgroundColor: "#f0fdf4", borderRadius: 8, borderWidth: 1, borderColor: "#bbf7d0" },
   viewAllBtnText: { fontSize: 13, fontWeight: "600", color: "#095c29" },
-
   fieldWrapper: { marginBottom: 14 },
   fieldLabel: { fontSize: 13, fontWeight: "600", color: "#64748b", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.4 },
   fieldValueBox: { minHeight: 50, justifyContent: "center", paddingHorizontal: 14, backgroundColor: "#f8fafc", borderRadius: 10, borderWidth: 1, borderColor: "#e2e8f0" },
   fieldValue: { fontSize: 16, color: "#0f172a" },
-
-  // --- PRESCRIPTION CARD ---
   prescriptionCard: { backgroundColor: "#ffffff", borderRadius: 14, borderWidth: 1, borderColor: "#e2e8f0", padding: 16, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
   prescriptionCardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
   prescriptionBadge: { backgroundColor: "#f0fdf4", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5, borderWidth: 1, borderColor: "#bbf7d0" },
@@ -193,7 +225,6 @@ const styles = StyleSheet.create({
   prescriptionSectionLabel: { fontSize: 11, fontWeight: "700", color: "#64748b", letterSpacing: 0.8, marginBottom: 6, textTransform: "uppercase" },
   prescriptionMedItem: { fontSize: 14, color: "#0f172a", lineHeight: 22 },
   prescriptionNotes: { fontSize: 14, color: "#475569", lineHeight: 20 },
-
   emptyHistoryBox: { alignItems: "center", paddingVertical: 28, backgroundColor: "#f8fafc", borderRadius: 12, borderWidth: 1, borderColor: "#e2e8f0", gap: 8 },
   emptyHistoryIcon: { fontSize: 28 },
   emptyHistoryText: { color: "#94a3b8", fontSize: 14, fontStyle: "italic" },

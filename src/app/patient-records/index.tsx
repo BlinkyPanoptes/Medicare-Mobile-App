@@ -1,7 +1,7 @@
-import { useRouter } from "expo-router";
 import { createPatient, deletePatient, fetchPatients, updatePatient } from "@/api/patient";
 import { useAuth } from "@/components/context/auth-context";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert, Platform, RefreshControl, ScrollView, StyleSheet,
@@ -236,10 +236,6 @@ export default function PatientRecordsScreen() {
         <View style={styles.fieldWrapper}>
           <Text style={styles.fieldLabelText}>Last Name</Text>
           <View style={styles.inputContainerRow}>
-<<<<<<< HEAD
-            <TextInput style={styles.fieldInput} value={lastName} onChangeText={setLastName} placeholder="Enter last name" placeholderTextColor="#94a3b8" />
-            {lastName.length > 0 && <TouchableOpacity onPress={() => handleClearField("lastName")} style={styles.clearBtnClick}><Text style={styles.clearBtnSymbol}>×</Text></TouchableOpacity>}
-=======
             <TextInput
               style={styles.fieldInput}
               value={lastName}
@@ -255,17 +251,12 @@ export default function PatientRecordsScreen() {
                 <Text style={styles.clearBtnSymbol}>×</Text>
               </TouchableOpacity>
             )}
->>>>>>> 600f848d35666edd3131e50bf45f1395a0bce77c
           </View>
         </View>
 
         <View style={styles.fieldWrapper}>
           <Text style={styles.fieldLabelText}>First Name</Text>
           <View style={styles.inputContainerRow}>
-<<<<<<< HEAD
-            <TextInput style={styles.fieldInput} value={firstName} onChangeText={setFirstName} placeholder="Enter first name" placeholderTextColor="#94a3b8" />
-            {firstName.length > 0 && <TouchableOpacity onPress={() => handleClearField("firstName")} style={styles.clearBtnClick}><Text style={styles.clearBtnSymbol}>×</Text></TouchableOpacity>}
-=======
             <TextInput
               style={styles.fieldInput}
               value={firstName}
@@ -281,7 +272,6 @@ export default function PatientRecordsScreen() {
                 <Text style={styles.clearBtnSymbol}>×</Text>
               </TouchableOpacity>
             )}
->>>>>>> 600f848d35666edd3131e50bf45f1395a0bce77c
           </View>
         </View>
 

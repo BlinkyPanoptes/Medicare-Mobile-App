@@ -17,4 +17,13 @@ export type Prescription = {
   patient: Patient;
   medications: Medication[];
   notes: string;
+
+  // 1. Add the new snapshot fields as optional/nullable properties
+  generic_name_snapshot?: string | null;
+  brand_name_snapshot?: string | null;
+
+  // 2. Allow the relationships to be null in case the record was deleted
+  generic: { id: number; generic_name: string } | null;
+  brand: { id: number; brand_name: string } | null;
+
 };
