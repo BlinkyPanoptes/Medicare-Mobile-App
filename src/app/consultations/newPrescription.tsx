@@ -1,3 +1,4 @@
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { useState } from "react";
 import {
   Alert,
@@ -9,7 +10,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
 
 import { useAuth } from "@/components/context/auth-context";
 
@@ -45,15 +45,15 @@ export default function PatientRecordsScreen() {
 
   // Local Mock Database
   const [patientDatabase, setPatientDatabase] = useState<PatientRecord[]>([
-    {
-      id: "1",
-      lastName: "Soratorio",
-      firstName: "Agnes",
-      gender: "Female",
-      birthdate: "January 25, 1954",
-      email: "agnes.soratorio@example.com",
-      mobileNumber: "9171234567",
-    },
+    // {
+    //   id: "1",
+    //   lastName: "Soratorio",
+    //   firstName: "Agnes",
+    //   gender: "Female",
+    //   birthdate: "January 25, 1954",
+    //   email: "agnes.soratorio@example.com",
+    //   mobileNumber: "9171234567",
+    // },
   ]);
 
   // --- FORM HELPERS ---
@@ -97,7 +97,7 @@ export default function PatientRecordsScreen() {
           month: "long",
           day: "numeric",
           year: "numeric",
-        })
+        }),
       );
     }
   };
@@ -106,7 +106,10 @@ export default function PatientRecordsScreen() {
 
   const handleSaveSubmit = async () => {
     if (!lastName.trim() || !firstName.trim() || !birthdate.trim()) {
-      Alert.alert("Missing Fields", "Please complete the patient's name and birthdate.");
+      Alert.alert(
+        "Missing Fields",
+        "Please complete the patient's name and birthdate.",
+      );
       return;
     }
 
@@ -117,14 +120,22 @@ export default function PatientRecordsScreen() {
         setPatientDatabase((prev) =>
           prev.map((item) =>
             item.id === editingPatientId
-              ? { ...item, lastName, firstName, gender, birthdate, email, mobileNumber }
-              : item
-          )
+              ? {
+                  ...item,
+                  lastName,
+                  firstName,
+                  gender,
+                  birthdate,
+                  email,
+                  mobileNumber,
+                }
+              : item,
+          ),
         );
         Alert.alert(
           "Success",
           `Patient data for ${firstName} ${lastName} has been modified successfully.`,
-          [{ text: "OK", onPress: () => setIsCreating(false) }]
+          [{ text: "OK", onPress: () => setIsCreating(false) }],
         );
       } else {
         const newPatient: PatientRecord = {
@@ -140,11 +151,14 @@ export default function PatientRecordsScreen() {
         Alert.alert(
           "Patient Added",
           `Record saved for ${firstName} ${lastName} in the directory.`,
-          [{ text: "OK", onPress: () => setIsCreating(false) }]
+          [{ text: "OK", onPress: () => setIsCreating(false) }],
         );
       }
     } catch (err: any) {
-      Alert.alert("Submission Error", "Could not process form database schema parameters.");
+      Alert.alert(
+        "Submission Error",
+        "Could not process form database schema parameters.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -159,9 +173,10 @@ export default function PatientRecordsScreen() {
         {
           text: "Delete",
           style: "destructive",
-          onPress: () => setPatientDatabase((prev) => prev.filter((p) => p.id !== id)),
+          onPress: () =>
+            setPatientDatabase((prev) => prev.filter((p) => p.id !== id)),
         },
-      ]
+      ],
     );
   };
 
@@ -169,16 +184,24 @@ export default function PatientRecordsScreen() {
   if (!isCreating) {
     return (
       <View style={styles.container}>
-        <ScrollView style={styles.scroller} contentContainerStyle={styles.content}>
+        <ScrollView
+          style={styles.scroller}
+          contentContainerStyle={styles.content}
+        >
           <View style={styles.listHeaderRow}>
             <Text style={styles.promptHeadline}>Registered Patients</Text>
-            <TouchableOpacity style={styles.addPatientBtn} onPress={openCreateForm}>
+            <TouchableOpacity
+              style={styles.addPatientBtn}
+              onPress={openCreateForm}
+            >
               <Text style={styles.addPatientBtnText}>+ Add Patient</Text>
             </TouchableOpacity>
           </View>
 
           {patientDatabase.length === 0 ? (
-            <Text style={styles.emptyText}>No patient records found. Click add to begin.</Text>
+            <Text style={styles.emptyText}>
+              No patient records found. Click add to begin.
+            </Text>
           ) : (
             patientDatabase.map((patient) => (
               <View key={patient.id} style={styles.patientCard}>
@@ -190,7 +213,9 @@ export default function PatientRecordsScreen() {
                     {patient.gender} • DOB: {patient.birthdate}
                   </Text>
                   {patient.mobileNumber ? (
-                    <Text style={styles.cardSubDetails}>📞 +63 {patient.mobileNumber}</Text>
+                    <Text style={styles.cardSubDetails}>
+                      📞 +63 {patient.mobileNumber}
+                    </Text>
                   ) : null}
                 </View>
 
@@ -206,7 +231,7 @@ export default function PatientRecordsScreen() {
                     onPress={() =>
                       handleDeletePatient(
                         patient.id,
-                        `${patient.firstName} ${patient.lastName}`
+                        `${patient.firstName} ${patient.lastName}`,
                       )
                     }
                   >
@@ -229,7 +254,9 @@ export default function PatientRecordsScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.promptHeadline}>Input the details of your patient</Text>
+        <Text style={styles.promptHeadline}>
+          Input the details of your patient
+        </Text>
 
         {/* LAST NAME */}
         <View style={styles.fieldWrapper}>
@@ -284,7 +311,12 @@ export default function PatientRecordsScreen() {
               onPress={() => setGender("Male")}
               activeOpacity={0.8}
             >
-              <View style={[styles.outerRadioRing, gender === "Male" && styles.activeOuterRing]}>
+              <View
+                style={[
+                  styles.outerRadioRing,
+                  gender === "Male" && styles.activeOuterRing,
+                ]}
+              >
                 {gender === "Male" && <View style={styles.innerRadioDot} />}
               </View>
               <Text style={styles.radioOptionLabelText}>Male</Text>
@@ -296,7 +328,10 @@ export default function PatientRecordsScreen() {
               activeOpacity={0.8}
             >
               <View
-                style={[styles.outerRadioRing, gender === "Female" && styles.activeOuterRing]}
+                style={[
+                  styles.outerRadioRing,
+                  gender === "Female" && styles.activeOuterRing,
+                ]}
               >
                 {gender === "Female" && <View style={styles.innerRadioDot} />}
               </View>
@@ -374,11 +409,12 @@ export default function PatientRecordsScreen() {
           <Text style={styles.infoBadgeIndicatorIcon}>ⓘ</Text>
           <View style={styles.infoAlertContentBodyTextGroup}>
             <Text style={styles.infoAlertMessageTextInline}>
-              We will send a copy of the prescription to your patient's email or mobile number.
+              We will send a copy of the prescription to your patient's email or
+              mobile number.
             </Text>
             <Text style={styles.infoAlertSubtextInline}>
-              If email or mobile number is not available, you may still continue to create a
-              prescription and send it using other sharing options.
+              If email or mobile number is not available, you may still continue
+              to create a prescription and send it using other sharing options.
             </Text>
           </View>
         </View>
@@ -387,7 +423,10 @@ export default function PatientRecordsScreen() {
       {/* SAVE BUTTON */}
       <View style={styles.bottomActionBarWrapper}>
         <TouchableOpacity
-          style={[styles.nextActionButtonCall, isSubmitting && { backgroundColor: "#82b27a" }]}
+          style={[
+            styles.nextActionButtonCall,
+            isSubmitting && { backgroundColor: "#82b27a" },
+          ]}
           onPress={handleSaveSubmit}
           disabled={isSubmitting}
           activeOpacity={0.9}
