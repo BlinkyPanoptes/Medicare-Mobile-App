@@ -128,6 +128,7 @@ export default function PatientRecordsScreen() {
           { text: "OK", onPress: () => { setIsCreating(false); loadPatients(); } },
         ]);
       }
+      await loadPatients();
     } catch (err: any) {
       const serverMessage =
         err?.response?.data?.message ||
@@ -235,16 +236,52 @@ export default function PatientRecordsScreen() {
         <View style={styles.fieldWrapper}>
           <Text style={styles.fieldLabelText}>Last Name</Text>
           <View style={styles.inputContainerRow}>
+<<<<<<< HEAD
             <TextInput style={styles.fieldInput} value={lastName} onChangeText={setLastName} placeholder="Enter last name" placeholderTextColor="#94a3b8" />
             {lastName.length > 0 && <TouchableOpacity onPress={() => handleClearField("lastName")} style={styles.clearBtnClick}><Text style={styles.clearBtnSymbol}>×</Text></TouchableOpacity>}
+=======
+            <TextInput
+              style={styles.fieldInput}
+              value={lastName}
+              onChangeText={setLastName}
+              placeholder="Enter last name"
+              placeholderTextColor="#94a3b8"
+            />
+            {lastName.length > 0 && (
+              <TouchableOpacity
+                onPress={() => handleClearField("lastName")}
+                style={styles.clearBtnClick}
+              >
+                <Text style={styles.clearBtnSymbol}>×</Text>
+              </TouchableOpacity>
+            )}
+>>>>>>> 600f848d35666edd3131e50bf45f1395a0bce77c
           </View>
         </View>
 
         <View style={styles.fieldWrapper}>
           <Text style={styles.fieldLabelText}>First Name</Text>
           <View style={styles.inputContainerRow}>
+<<<<<<< HEAD
             <TextInput style={styles.fieldInput} value={firstName} onChangeText={setFirstName} placeholder="Enter first name" placeholderTextColor="#94a3b8" />
             {firstName.length > 0 && <TouchableOpacity onPress={() => handleClearField("firstName")} style={styles.clearBtnClick}><Text style={styles.clearBtnSymbol}>×</Text></TouchableOpacity>}
+=======
+            <TextInput
+              style={styles.fieldInput}
+              value={firstName}
+              onChangeText={setFirstName}
+              placeholder="Enter first name"
+              placeholderTextColor="#94a3b8"
+            />
+            {firstName.length > 0 && (
+              <TouchableOpacity
+                onPress={() => handleClearField("firstName")}
+                style={styles.clearBtnClick}
+              >
+                <Text style={styles.clearBtnSymbol}>×</Text>
+              </TouchableOpacity>
+            )}
+>>>>>>> 600f848d35666edd3131e50bf45f1395a0bce77c
           </View>
         </View>
 
