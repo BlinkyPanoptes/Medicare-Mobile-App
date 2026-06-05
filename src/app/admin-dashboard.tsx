@@ -23,6 +23,7 @@ export default function AdminDashboard() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [role, setRole] = useState<"doctor" | "assistant">("doctor");
   const [prcId, setPrcId] = useState("");
+  const [specialization, setSpecialization] = useState("");
   const [clinicIds, setClinicIds] = useState("");   // comma-separated input e.g. "1,3"
   const [userLoading, setUserLoading] = useState(false);
 
