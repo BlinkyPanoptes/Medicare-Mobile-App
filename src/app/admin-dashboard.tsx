@@ -74,6 +74,7 @@ export default function AdminDashboard() {
 
       if (role === "doctor") {
         payload.prc_id = prcId;
+        payload.specialization = specialization;
       }
 
       const response = await apiClient.post("/auth/register", payload);
@@ -88,6 +89,7 @@ export default function AdminDashboard() {
       setPrcId("");
       setClinicIds("");
       setRole("doctor");
+      setSpecialization("");
     } catch (error: any) {
       const message =
         error.response?.data?.message || error.message || "Something went wrong";
@@ -221,6 +223,15 @@ export default function AdminDashboard() {
             placeholder="PRC ID"
             value={prcId}
             onChangeText={setPrcId}
+            style={styles.input}
+          />
+        )}
+
+        {role === "doctor" && (
+          <TextInput
+            placeholder="Specialization"
+            value={specialization}
+            onChangeText={setSpecialization}
             style={styles.input}
           />
         )}
