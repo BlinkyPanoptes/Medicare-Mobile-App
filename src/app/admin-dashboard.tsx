@@ -1,16 +1,9 @@
+import { useState } from "react";
+import { Alert, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { router } from "expo-router";
 import apiClient from "@/api/client";
 import { useAuth } from "@/components/context/auth-context";
-import { router } from "expo-router";
-import { useState } from "react";
-import {
-  Alert,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { adminDashboardStyles as styles } from "@/styles/adminDashboardStyles";
 
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
@@ -23,7 +16,8 @@ export default function AdminDashboard() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [role, setRole] = useState<"doctor" | "assistant">("doctor");
   const [prcId, setPrcId] = useState("");
-  const [clinicIds, setClinicIds] = useState("");   // comma-separated input e.g. "1,3"
+  const [specialization, setSpecialization] = useState("");
+  const [clinicIds, setClinicIds] = useState("");
   const [userLoading, setUserLoading] = useState(false);
 
   // — Create Clinic form state —
@@ -48,7 +42,6 @@ export default function AdminDashboard() {
       return;
     }
 
-    // Parse comma-separated clinic IDs into a number array
     const parsedClinicIds = clinicIds
       .split(",")
       .map((s) => parseInt(s.trim(), 10))
@@ -73,24 +66,18 @@ export default function AdminDashboard() {
 
       if (role === "doctor") {
         payload.prc_id = prcId;
+        payload.specialization = specialization;
       }
 
       const response = await apiClient.post("/auth/register", payload);
       Alert.alert("Success", response.data.message);
 
       // Reset form
-      setUserEmail("");
-      setUserPassword("");
-      setFirstName("");
-      setLastName("");
-      setPhoneNumber("");
-      setPrcId("");
-      setClinicIds("");
+      setUserEmail(""); setUserPassword(""); setFirstName(""); setLastName(""); 
+      setPhoneNumber(""); setPrcId(""); setClinicIds(""); setSpecialization("");
       setRole("doctor");
     } catch (error: any) {
-      const message =
-        error.response?.data?.message || error.message || "Something went wrong";
-      Alert.alert("Error", message);
+      Alert.alert("Error", error.response?.data?.message || "Something went wrong");
     } finally {
       setUserLoading(false);
     }
@@ -114,15 +101,9 @@ export default function AdminDashboard() {
       const response = await apiClient.post("/clinics", payload);
       Alert.alert("Success", `Clinic "${response.data.clinic_name}" created.`);
 
-      // Reset form
-      setClinicName("");
-      setClinicAddress("");
-      setClinicPhone("");
-      setDoctorId("");
+      setClinicName(""); setClinicAddress(""); setClinicPhone(""); setDoctorId("");
     } catch (error: any) {
-      const message =
-        error.response?.data?.message || error.message || "Something went wrong";
-      Alert.alert("Error", message);
+      Alert.alert("Error", error.response?.data?.message || "Something went wrong");
     } finally {
       setClinicLoading(false);
     }
@@ -130,17 +111,18 @@ export default function AdminDashboard() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-
-      {/* — Overview card — */}
+      {/* Overview card */}
       <View style={styles.card}>
         <Text style={styles.title}>System Overview</Text>
-        {/* FIX: was user?.firstName — backend returns first_name */}
         <Text style={styles.text}>Welcome, {user?.first_name}!</Text>
         <Text style={styles.text}>Permission Level: {user?.role.toUpperCase()}</Text>
       </View>
 
       <View style={styles.grid}>
-        <TouchableOpacity style={styles.actionButton}>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => router.push("/manage-users")}
+        >
           <Text style={styles.actionText}>Manage Users</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionButton}>
@@ -148,263 +130,54 @@ export default function AdminDashboard() {
         </TouchableOpacity>
       </View>
 
-      {/* — Create User — */}
+      {/* Create Staff */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Create Staff Account</Text>
+        <TextInput placeholder="First Name" value={firstName} onChangeText={setFirstName} style={styles.input} />
+        <TextInput placeholder="Last Name" value={lastName} onChangeText={setLastName} style={styles.input} />
+        <TextInput placeholder="Email" value={userEmail} onChangeText={setUserEmail} autoCapitalize="none" keyboardType="email-address" style={styles.input} />
+        <TextInput placeholder="Password" value={userPassword} onChangeText={setUserPassword} secureTextEntry style={styles.input} />
+        <TextInput placeholder="Phone Number" value={phoneNumber} onChangeText={setPhoneNumber} keyboardType="phone-pad" style={styles.input} />
+        <TextInput placeholder="Clinic IDs (e.g. 1,3)" value={clinicIds} onChangeText={setClinicIds} keyboardType="numbers-and-punctuation" style={styles.input} />
 
-        <TextInput
-          placeholder="First Name"
-          value={firstName}
-          onChangeText={setFirstName}
-          style={styles.input}
-        />
-        <TextInput
-          placeholder="Last Name"
-          value={lastName}
-          onChangeText={setLastName}
-          style={styles.input}
-        />
-        <TextInput
-          placeholder="Email"
-          value={userEmail}
-          onChangeText={setUserEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          style={styles.input}
-        />
-        <TextInput
-          placeholder="Password"
-          value={userPassword}
-          onChangeText={setUserPassword}
-          secureTextEntry
-          style={styles.input}
-        />
-        <TextInput
-          placeholder="Phone Number"
-          value={phoneNumber}
-          onChangeText={setPhoneNumber}
-          keyboardType="phone-pad"
-          style={styles.input}
-        />
-        <TextInput
-          placeholder="Clinic IDs (comma-separated, e.g. 1,3)"
-          value={clinicIds}
-          onChangeText={setClinicIds}
-          keyboardType="numbers-and-punctuation"
-          style={styles.input}
-        />
-
-        {/* Role toggle */}
         <View style={styles.roleRow}>
-          <TouchableOpacity
-            style={[styles.roleButton, role === "doctor" && styles.roleButtonActive]}
-            onPress={() => setRole("doctor")}
-          >
-            <Text style={[styles.roleButtonText, role === "doctor" && styles.roleButtonTextActive]}>
-              Doctor
-            </Text>
+          <TouchableOpacity style={[styles.roleButton, role === "doctor" && styles.roleButtonActive]} onPress={() => setRole("doctor")}>
+            <Text style={[styles.roleButtonText, role === "doctor" && styles.roleButtonTextActive]}>Doctor</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.roleButton, role === "assistant" && styles.roleButtonActive]}
-            onPress={() => setRole("assistant")}
-          >
-            <Text style={[styles.roleButtonText, role === "assistant" && styles.roleButtonTextActive]}>
-              Assistant
-            </Text>
+          <TouchableOpacity style={[styles.roleButton, role === "assistant" && styles.roleButtonActive]} onPress={() => setRole("assistant")}>
+            <Text style={[styles.roleButtonText, role === "assistant" && styles.roleButtonTextActive]}>Assistant</Text>
           </TouchableOpacity>
         </View>
 
-        {/* PRC ID — only shown for doctors */}
         {role === "doctor" && (
-          <TextInput
-            placeholder="PRC ID"
-            value={prcId}
-            onChangeText={setPrcId}
-            style={styles.input}
-          />
+          <>
+            <TextInput placeholder="PRC ID" value={prcId} onChangeText={setPrcId} style={styles.input} />
+            <TextInput placeholder="Specialization" value={specialization} onChangeText={setSpecialization} style={styles.input} />
+          </>
         )}
 
-        <TouchableOpacity
-          style={[styles.submitButton, userLoading && styles.submitButtonDisabled]}
-          onPress={handleCreateUser}
-          disabled={userLoading}
-        >
-          <Text style={styles.submitButtonText}>
-            {userLoading ? "Creating..." : "Create Staff Account"}
-          </Text>
+        <TouchableOpacity style={[styles.submitButton, userLoading && styles.submitButtonDisabled]} onPress={handleCreateUser} disabled={userLoading}>
+          <Text style={styles.submitButtonText}>{userLoading ? "Creating..." : "Create Staff Account"}</Text>
         </TouchableOpacity>
       </View>
 
-      {/* — Create Clinic — */}
+      {/* Create Clinic */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Create Clinic</Text>
+        <TextInput placeholder="Clinic Name" value={clinicName} onChangeText={setClinicName} style={styles.input} />
+        <TextInput placeholder="Address (optional)" value={clinicAddress} onChangeText={setClinicAddress} style={styles.input} />
+        <TextInput placeholder="Phone Number (optional)" value={clinicPhone} onChangeText={setClinicPhone} keyboardType="phone-pad" style={styles.input} />
+        <TextInput placeholder="Doctor ID (optional)" value={doctorId} onChangeText={setDoctorId} keyboardType="numeric" style={styles.input} />
 
-        <TextInput
-          placeholder="Clinic Name"
-          value={clinicName}
-          onChangeText={setClinicName}
-          style={styles.input}
-        />
-        <TextInput
-          placeholder="Address (optional)"
-          value={clinicAddress}
-          onChangeText={setClinicAddress}
-          style={styles.input}
-        />
-        <TextInput
-          placeholder="Phone Number (optional)"
-          value={clinicPhone}
-          onChangeText={setClinicPhone}
-          keyboardType="phone-pad"
-          style={styles.input}
-        />
-        <TextInput
-          placeholder="Doctor ID (optional)"
-          value={doctorId}
-          onChangeText={setDoctorId}
-          keyboardType="numeric"
-          style={styles.input}
-        />
-
-        <TouchableOpacity
-          style={[styles.submitButton, clinicLoading && styles.submitButtonDisabled]}
-          onPress={handleCreateClinic}
-          disabled={clinicLoading}
-        >
-          <Text style={styles.submitButtonText}>
-            {clinicLoading ? "Creating..." : "Create Clinic"}
-          </Text>
+        <TouchableOpacity style={[styles.submitButton, clinicLoading && styles.submitButtonDisabled]} onPress={handleCreateClinic} disabled={clinicLoading}>
+          <Text style={styles.submitButtonText}>{clinicLoading ? "Creating..." : "Create Clinic"}</Text>
         </TouchableOpacity>
       </View>
 
-      {/* — Logout — */}
+      {/* Logout */}
       <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
         <Text style={styles.logoutText}>Logout</Text>
       </TouchableOpacity>
-
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f5f7fb",
-  },
-  content: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-  card: {
-    backgroundColor: "#fff",
-    padding: 20,
-    borderRadius: 10,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: "#ddd",
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: "bold",
-    marginBottom: 10,
-    color: "#095c29",
-  },
-  text: {
-    fontSize: 16,
-    color: "#333",
-    marginBottom: 5,
-  },
-  grid: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 20,
-  },
-  actionButton: {
-    flex: 1,
-    backgroundColor: "#e2e8f0",
-    padding: 20,
-    borderRadius: 10,
-    marginHorizontal: 5,
-    alignItems: "center",
-  },
-  actionText: {
-    fontWeight: "bold",
-    color: "#095c29",
-  },
-  section: {
-    backgroundColor: "#fff",
-    padding: 20,
-    borderRadius: 10,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: "#ddd",
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#095c29",
-    marginBottom: 16,
-  },
-  input: {
-    backgroundColor: "#f8fafc",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 10,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    fontSize: 15,
-    color: "#111827",
-  },
-  roleRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: 12,
-  },
-  roleButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    alignItems: "center",
-    backgroundColor: "#f8fafc",
-  },
-  roleButtonActive: {
-    backgroundColor: "#095c29",
-    borderColor: "#095c29",
-  },
-  roleButtonText: {
-    fontWeight: "600",
-    color: "#64748b",
-  },
-  roleButtonTextActive: {
-    color: "#fff",
-  },
-  submitButton: {
-    backgroundColor: "#095c29",
-    paddingVertical: 14,
-    borderRadius: 10,
-    alignItems: "center",
-    marginTop: 4,
-  },
-  submitButtonDisabled: {
-    opacity: 0.6,
-  },
-  submitButtonText: {
-    color: "#fff",
-    fontWeight: "bold",
-    fontSize: 15,
-  },
-  logoutButton: {
-    backgroundColor: "#dc2626",
-    padding: 15,
-    borderRadius: 10,
-    alignItems: "center",
-    marginTop: 10,
-  },
-  logoutText: {
-    color: "#fff",
-    fontWeight: "bold",
-  },
-});
