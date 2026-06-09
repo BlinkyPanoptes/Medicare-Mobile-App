@@ -1,12 +1,15 @@
-import { useEffect, useState } from 'react';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { fetchPatientById } from '@/api/patient';
 import { fetchPatientConsultations } from "@/api/consultation";
+import { fetchPatientById } from '@/api/patient';
+import { patientDetailsStyles as styles } from "@/styles/patientRecordsStyles";
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 import {
-  View, Text, ScrollView,
-  TouchableOpacity, ActivityIndicator, Alert
+  ActivityIndicator, Alert,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import { patientDetailsStyles as styles } from "@/styles/patientRecordsStyles"; 
 
 type Consultation = {
   id: number;
@@ -21,6 +24,19 @@ type Consultation = {
     instructions: string | null;
     generic: { id: number; generic_name: string };
     brand: { id: number; brand_name: string };
+    generic_name_snapshot?: string | null;
+    brand_name_snapshot?: string | null;
+  }[];
+  diseases?: {
+    id: number;
+    disease_name: string;
+    pivot: {
+      id: number;
+      type: string;
+      status: string;
+      symptoms: string | null;
+      disease_name_snapshot: string | null;
+    };
   }[];
 };
 
@@ -75,6 +91,41 @@ export default function PatientDetailsScreen() {
 
   const latestConsultation = consultations[0] ?? null;
 
+  // Collect active diagnoses across all consultations — deduplicated by disease_id
+  const activeDiagnoses = (() => {
+    const seen = new Set<number>();
+    const result: {
+      diagnosis_id: number;
+      disease_id: number;
+      disease_name: string;
+      status: string;
+      type: string;
+      symptoms: string | null;
+    }[] = [];
+
+    [...consultations].forEach((c) => {
+      if (!c.diseases) return;
+      c.diseases.forEach((d) => {
+        const status = d.pivot?.status;
+        if (
+          (status === "ongoing" || status === "referred") &&
+          !seen.has(d.id)
+        ) {
+          seen.add(d.id);
+          result.push({
+            diagnosis_id: d.pivot.id,
+            disease_id: d.id,
+            disease_name: d.pivot.disease_name_snapshot ?? d.disease_name,
+            status,
+            type: d.pivot.type,
+            symptoms: d.pivot.symptoms ?? null,
+          });
+        }
+      });
+    });
+    return result;
+  })();
+
   return (
     <View style={styles.container}>
       {/* PROFILE BANNER */}
@@ -104,6 +155,58 @@ export default function PatientDetailsScreen() {
         <DetailField label="First Name" value={patient.first_name} />
         <DetailField label="Gender" value={patient.gender ? patient.gender.charAt(0).toUpperCase() + patient.gender.slice(1) : "N/A"} />
         <DetailField label="Birthdate" value={patient.birthdate} />
+
+        {/* ACTIVE DIAGNOSES */}
+        {activeDiagnoses.length > 0 && (
+          <>
+            <View style={styles.sectionDivider} />
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>Active Diagnoses</Text>
+              <TouchableOpacity
+                onPress={() => router.push(`/patient-records/${id}/diagnoses`)}
+              >
+                <Text style={styles.viewAllBtnText}>View All →</Text>
+              </TouchableOpacity>
+            </View>
+            {activeDiagnoses.map((diag) => (
+              <View
+                key={diag.diagnosis_id}
+                style={{
+                  backgroundColor: "#fff7ed",
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: "#fed7aa",
+                  padding: 12,
+                  marginBottom: 8,
+                }}
+              >
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                  <Text style={{ fontSize: 15, fontWeight: "700", color: "#0f172a", flex: 1 }}>
+                    {diag.disease_name}
+                  </Text>
+                  <View style={{
+                    backgroundColor: diag.status === "ongoing" ? "#fef3c7" : "#e0e7ff",
+                    borderRadius: 6,
+                    paddingHorizontal: 8,
+                    paddingVertical: 3,
+                  }}>
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: "#334155" }}>
+                      {diag.status.charAt(0).toUpperCase() + diag.status.slice(1)}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 12, color: "#92400e", fontWeight: "600" }}>
+                  {diag.type.charAt(0).toUpperCase() + diag.type.slice(1)} diagnosis
+                </Text>
+                {diag.symptoms && (
+                  <Text style={{ fontSize: 13, color: "#64748b", marginTop: 4, fontStyle: "italic" }}>
+                    {diag.symptoms}
+                  </Text>
+                )}
+              </View>
+            ))}
+          </>
+        )}
 
         {/* PRESCRIPTION HISTORY */}
         <View style={styles.sectionDivider} />

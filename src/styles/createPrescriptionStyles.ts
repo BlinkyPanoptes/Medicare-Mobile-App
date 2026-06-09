@@ -1,5 +1,5 @@
+import { COLORS, SIZES, SPACING } from "@/theme"; // Assuming these are your theme tokens
 import { StyleSheet } from "react-native";
-import { COLORS, SPACING, SIZES } from "@/theme"; // Assuming these are your theme tokens
 
 export const createPrescriptionStyles = StyleSheet.create({
   container: { 
@@ -350,4 +350,18 @@ export const createPrescriptionStyles = StyleSheet.create({
     color: COLORS.primary, 
     fontWeight: "700" 
   },
+
+  sectionLabel: { fontSize: 16, fontWeight: "700", color: "#1e293b", marginTop: 20, marginBottom: 4 },
+  sectionSubLabel: { fontSize: 13, color: "#64748b", marginBottom: 14 },
+  diagnosisCard: { backgroundColor: "#f0fdf4", borderWidth: 1, borderColor: "#bbf7d0", borderRadius: 12, padding: 14, marginBottom: 10, flexDirection: "row", alignItems: "center" },
+  diagnosisCardHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 },
+  diagnosisName: { fontSize: 15, fontWeight: "700", color: "#0f172a", flex: 1 },
+  diagnosisSymptoms: { fontSize: 13, color: "#475569", marginTop: 2 },
+  diagnosisTypeBadge: { backgroundColor: "#e2e8f0", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 },
+  diagnosisTypePrimary: { backgroundColor: "#dcfce7" },
+  diagnosisTypeBadgeText: { fontSize: 11, fontWeight: "700", color: "#475569" },
+  typeBtn: { flex: 1, paddingVertical: 10, borderRadius: 8, backgroundColor: "#f1f5f9", alignItems: "center", borderWidth: 1, borderColor: "#e2e8f0" },
+  typeBtnSelected: { backgroundColor: "#095c29", borderColor: "#095c29" },
+  typeBtnText: { fontSize: 14, fontWeight: "600", color: "#475569" },
+  typeBtnTextSelected: { color: "#ffffff" },
 });
