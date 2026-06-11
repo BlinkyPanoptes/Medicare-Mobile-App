@@ -1,17 +1,17 @@
 import { fetchPatientConsultations } from "@/api/consultation";
 import { fetchPatients } from "@/api/patient";
+import { rePrescribeStyles as styles } from "@/styles/rePrescribeStyles";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    ScrollView,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { rePrescribeStyles as styles } from "@/styles/rePrescribeStyles";
 
 type Patient = {
   id: number;
@@ -33,11 +33,35 @@ type Prescription = {
   brand: { id: number; brand_name: string };
 };
 
+type ActiveDiagnosis = {
+  diagnosis_id: number;
+  disease_id: number;
+  disease_name: string;
+  status: "ongoing" | "referred";
+  type: string;
+  symptoms: string | null;
+  consultation_id: number;
+};
+
+// Update existing Consultation type to include diseases
 type Consultation = {
   id: number;
   consultation_date: string;
   prescriptions: Prescription[];
+  diseases?: {
+    id: number;
+    disease_name: string;
+    pivot: {
+      id: number;
+      type: string;
+      status: string;
+      symptoms: string | null;
+      disease_name_snapshot: string | null;
+    };
+  }[];
 };
+
+
 
 export default function ReprescribeScreen() {
   const router = useRouter();
@@ -76,33 +100,54 @@ export default function ReprescribeScreen() {
   const handleSelectPatient = async (patient: Patient) => {
     setLoadingPatientId(patient.id);
     try {
-      // Fetch this patient's consultation history
       const res = await fetchPatientConsultations(patient.id);
       const consultations: Consultation[] = res.data.data ?? [];
 
-      // Find the most recent consultation that has at least one prescription
-      const latestWithRx = [...consultations]
-        .reverse()
-        .find((c) => c.prescriptions && c.prescriptions.length > 0);
+      // Find most recent consultation with prescriptions for prefill
+      const latestWithRx = consultations
+      .find((c) => c.prescriptions && c.prescriptions.length > 0);
 
-      // Build prefill param — empty array if no prescription history exists
-      // createPrescription.tsx handles both cases: prefilled and blank
       const prefillMeds = latestWithRx
         ? latestWithRx.prescriptions.map((rx) => ({
             key: rx.id.toString(),
             generic_id: rx.generic?.id ?? 0,
             brand_id: rx.brand?.id ?? 0,
-            
-            // ✅ Read from the snapshot if the relationship is missing
             generic_name: rx.generic?.generic_name ?? rx.generic_name_snapshot ?? "Unknown",
             brand_name: rx.brand?.brand_name ?? rx.brand_name_snapshot ?? "Unknown",
-            
             dosage: rx.dosage,
             frequency: rx.frequency,
             duration: rx.duration,
             instructions: rx.instructions ?? "",
-            }))
+          }))
         : [];
+
+      // Collect all active diagnoses (ongoing/referred) across all consultations
+      const activeDiagnoses: ActiveDiagnosis[] = [];
+      const seenDiseaseIds = new Set<number>();
+
+      consultations.forEach((c) => {
+      if (!c.diseases) return;
+      c.diseases.forEach((d) => {
+          const status = d.pivot?.status;
+          const diseaseId = d.id;
+          // Only include ongoing/referred, deduplicate by disease_id (keep most recent)
+          if (
+            (status === "ongoing" || status === "referred") &&
+            !seenDiseaseIds.has(diseaseId)
+          ) {
+            seenDiseaseIds.add(diseaseId);
+            activeDiagnoses.push({
+              diagnosis_id: d.pivot.id,
+              disease_id: d.id,
+              disease_name: d.pivot.disease_name_snapshot ?? d.disease_name ?? "Unknown",
+              status,
+              type: d.pivot.type,
+              symptoms: d.pivot.symptoms ?? null,
+              consultation_id: c.id,
+            });
+          }
+        });
+      });
 
       router.push({
         pathname: "/consultations/createPrescription",
@@ -111,8 +156,8 @@ export default function ReprescribeScreen() {
           patientName: `${patient.last_name}, ${patient.first_name}`,
           patientGender: patient.gender,
           patientBirthdate: patient.birthdate,
-          // Pass prefill as JSON string — createPrescription.tsx parses this
           prefillMeds: JSON.stringify(prefillMeds),
+          prefillActiveDiagnoses: JSON.stringify(activeDiagnoses),
         },
       });
     } catch {

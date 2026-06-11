@@ -1,5 +1,5 @@
 import { StyleSheet } from "react-native";
-import { COLORS, SPACING, SIZES } from "@/theme"; // Assuming these are your theme tokens
+import { COLORS, SPACING, SIZES } from "@/theme";
 
 export const createPrescriptionStyles = StyleSheet.create({
   container: { 
@@ -16,6 +16,17 @@ export const createPrescriptionStyles = StyleSheet.create({
     fontWeight: "700", 
     color: COLORS.text, 
     marginBottom: SPACING.sm 
+  },
+  sectionSubtitle: { 
+    fontSize: 13, 
+    color: COLORS.muted, 
+    marginBottom: SPACING.sm, 
+    marginTop: -8 
+  },
+  optionalTag: { 
+    fontSize: 13, 
+    fontWeight: "400", 
+    color: COLORS.disabled 
   },
 
   // Patient Card
@@ -66,6 +77,81 @@ export const createPrescriptionStyles = StyleSheet.create({
   patientCardSub: { 
     fontSize: 14, 
     color: COLORS.muted 
+  },
+
+  // Active Diagnosis Cards
+  activeDiagCard: { 
+    backgroundColor: "#fff7ed", 
+    borderRadius: SIZES.radius, 
+    borderWidth: 1, 
+    borderColor: "#fed7aa", 
+    padding: SPACING.md, 
+    marginBottom: SPACING.sm 
+  },
+  activeDiagHeader: { 
+    flexDirection: "row", 
+    alignItems: "center", 
+    justifyContent: "space-between", 
+    marginBottom: 6 
+  },
+  activeDiagName: { 
+    fontSize: 15, 
+    fontWeight: "700", 
+    color: COLORS.text, 
+    flex: 1 
+  },
+  activeDiagSymptoms: { 
+    fontSize: 13, 
+    color: COLORS.muted, 
+    marginBottom: 4, 
+    fontStyle: "italic" 
+  },
+  activeDiagType: { 
+    fontSize: 12, 
+    color: "#92400e", 
+    fontWeight: "600" 
+  },
+  diagStatusRow: { 
+    flexDirection: "row", 
+    gap: SPACING.sm, 
+    marginTop: SPACING.sm 
+  },
+  diagStatusBtn: { 
+    flex: 1, 
+    borderWidth: 1.5, 
+    borderColor: COLORS.primary, 
+    borderRadius: 8, 
+    paddingVertical: 8, 
+    alignItems: "center" 
+  },
+  diagStatusBtnSecondary: { 
+    borderColor: "#f59e0b" 
+  },
+  diagStatusBtnText: { 
+    color: COLORS.primary, 
+    fontWeight: "600", 
+    fontSize: 13 
+  },
+  diagStatusBtnTextSecondary: { 
+    color: "#f59e0b" 
+  },
+
+  // Status Badges
+  statusBadge: { 
+    paddingHorizontal: 8, 
+    paddingVertical: 3, 
+    borderRadius: 6 
+  },
+  statusOngoing: { 
+    backgroundColor: "#dcfce7" 
+  },
+  statusReferred: { 
+    backgroundColor: "#fef9c3" 
+  },
+  statusBadgeText: { 
+    fontSize: 11, 
+    fontWeight: "700", 
+    color: "#166534" 
   },
 
   // Text Areas
@@ -182,7 +268,7 @@ export const createPrescriptionStyles = StyleSheet.create({
     paddingVertical: SPACING.md, 
     alignItems: "center", 
     marginTop: SPACING.sm, 
-    marginBottom: SPACING.lg 
+    marginBottom: SPACING.sm 
   },
   addMedBtnText: { 
     color: COLORS.primary, 
@@ -196,7 +282,8 @@ export const createPrescriptionStyles = StyleSheet.create({
     fontSize: 15, 
     fontWeight: "600", 
     color: COLORS.muted, 
-    marginBottom: SPACING.sm 
+    marginBottom: SPACING.sm,
+    marginTop: SPACING.xl
   },
 
   // Bottom Bar
@@ -349,5 +436,54 @@ export const createPrescriptionStyles = StyleSheet.create({
   pickerItemTextSelected: { 
     color: COLORS.primary, 
     fontWeight: "700" 
+  },
+
+  // Disease Create
+  createDiseaseLink: { 
+    paddingVertical: SPACING.sm, 
+    alignItems: "center" 
+  },
+  createDiseaseLinkText: { 
+    color: COLORS.primary, 
+    fontWeight: "600", 
+    fontSize: 14 
+  },
+  createDiseaseHeader: { 
+    flexDirection: "row", 
+    justifyContent: "space-between", 
+    alignItems: "center", 
+    marginBottom: SPACING.sm 
+  },
+  cancelCreateText: { 
+    color: COLORS.primary, 
+    fontSize: 14, 
+    fontWeight: "600" 
+  },
+
+  // Diagnosis Type Selector
+  typeRow: { 
+    flexDirection: "row", 
+    gap: SPACING.sm 
+  },
+  typeBtn: { 
+    flex: 1, 
+    paddingVertical: SPACING.sm, 
+    borderRadius: 8, 
+    borderWidth: 1, 
+    borderColor: COLORS.border, 
+    alignItems: "center", 
+    backgroundColor: "#f8fafc" 
+  },
+  typeBtnActive: { 
+    backgroundColor: COLORS.primary, 
+    borderColor: COLORS.primary 
+  },
+  typeBtnText: { 
+    fontWeight: "600", 
+    color: COLORS.muted, 
+    fontSize: 14 
+  },
+  typeBtnTextActive: { 
+    color: COLORS.white 
   },
 });
