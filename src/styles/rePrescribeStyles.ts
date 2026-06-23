@@ -1,90 +1,92 @@
 import { StyleSheet } from "react-native";
-import { COLORS, SPACING, SIZES } from "@/theme";
+import { COLORS, SIZES, SHADOWS } from "@/theme";
 
 export const rePrescribeStyles = StyleSheet.create({
+
+  // ─── Layout ────────────────────────────────────────────────────────────────
+
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
   },
-  searchWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
-  },
-  searchIcon: {
-    fontSize: 16,
-    marginRight: SPACING.sm,
-  },
-  searchInput: {
+  scroller: {
     flex: 1,
-    fontSize: 15,
-    color: COLORS.text,
-    height: 40,
-  },
-  clearBtn: {
-    padding: 4,
-  },
-  clearBtnText: {
-    fontSize: 20,
-    color: COLORS.muted,
   },
   content: {
-    paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.sm,
-    paddingBottom: SPACING.xxxl,
+    padding: 16,
+    paddingBottom: 32,
   },
-  emptyText: {
-    textAlign: "center",
-    color: COLORS.muted,
-    marginTop: SPACING.xxxl,
-    fontSize: 15,
-  },
-  card: {
+
+  // ─── Search Bar ────────────────────────────────────────────────────────────
+
+  searchBarWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: COLORS.white,
     borderRadius: SIZES.radius,
     borderWidth: 1,
     borderColor: COLORS.border,
-    padding: SPACING.md,
-    marginBottom: SPACING.sm,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 16,
+  },
+  searchBarInput: {
+    flex: 1,
+    fontSize: 15,
+    color: COLORS.text,
+  },
+  clearBtnClick: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  clearBtnSymbol: {
+    fontSize: 20,
+    color: COLORS.muted,
+    lineHeight: 22,
+  },
+
+  // ─── List Header ───────────────────────────────────────────────────────────
+
+  listHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: SPACING.sm,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
+    justifyContent: "space-between",
+    marginBottom: 12,
   },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#dcfce7",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  avatarText: {
-    fontSize: 15,
+  promptHeadline: {
+    fontSize: 18,
     fontWeight: "700",
-    color: COLORS.primary,
+    color: COLORS.text,
   },
-  cardInfo: {
+  patientCount: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: COLORS.muted,
+  },
+
+  // ─── Patient Cards ─────────────────────────────────────────────────────────
+
+  patientCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.white,
+    borderRadius: SIZES.radius,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 14,
+    marginBottom: 10,
+    ...SHADOWS.soft,
+  },
+  cardInfoGroup: {
     flex: 1,
   },
-  cardName: {
+  cardNameText: {
     fontSize: 15,
     fontWeight: "700",
     color: COLORS.text,
     marginBottom: 2,
   },
-  cardSub: {
+  cardSubDetails: {
     fontSize: 13,
     color: COLORS.muted,
   },
@@ -92,5 +94,16 @@ export const rePrescribeStyles = StyleSheet.create({
     fontSize: 22,
     color: "#cbd5e1",
     fontWeight: "300",
+    paddingLeft: 8,
   },
+
+  // ─── Empty State ───────────────────────────────────────────────────────────
+
+  emptyText: {
+    textAlign: "center",
+    color: COLORS.muted,
+    marginTop: 48,
+    fontSize: 15,
+  },
+
 });

@@ -85,7 +85,25 @@ export default function PatientDetailsScreen() {
             {(patient.last_name?.[0] ?? "").toUpperCase()}
           </Text>
         </View>
-        <Text style={styles.patientFullName}>{patient.first_name} {patient.last_name}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, justifyContent: "center" }}>
+          <Text style={styles.patientFullName}>{patient.first_name} {patient.last_name}</Text>
+          <View style={{
+            paddingHorizontal: 8,
+            paddingVertical: 3,
+            borderRadius: 6,
+            backgroundColor: consultations.length > 0 ? "#f1f5f9" : "#dcfce7",
+            borderWidth: 1,
+            borderColor: consultations.length > 0 ? "#cbd5e1" : "#86efac",
+          }}>
+            <Text style={{
+              fontSize: 11,
+              fontWeight: "700",
+              color: consultations.length > 0 ? "#475569" : "#166534",
+            }}>
+              {consultations.length > 0 ? "old" : "new"}
+            </Text>
+          </View>
+        </View>
         <Text style={styles.patientSubInfo}>
           {patient.gender ? patient.gender.charAt(0).toUpperCase() + patient.gender.slice(1) : "—"} 
           {" "} • {patient.birthdate ?? "—"}
@@ -104,6 +122,10 @@ export default function PatientDetailsScreen() {
         <DetailField label="First Name" value={patient.first_name} />
         <DetailField label="Gender" value={patient.gender ? patient.gender.charAt(0).toUpperCase() + patient.gender.slice(1) : "N/A"} />
         <DetailField label="Birthdate" value={patient.birthdate} />
+        <DetailField label="Civil Status" value={patient.civil_status ? patient.civil_status.charAt(0).toUpperCase() + patient.civil_status.slice(1) : "N/A"} />
+        <DetailField label="Height" value={patient.height ? `${patient.height} cm` : "N/A"} />
+        <DetailField label="Weight" value={patient.weight ? `${patient.weight} kg` : "N/A"} />
+        <DetailField label="Allergies" value={patient.allergies || "N/A"} />
 
         {/* PRESCRIPTION HISTORY */}
         <View style={styles.sectionDivider} />

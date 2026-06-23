@@ -1,127 +1,134 @@
-import { useRouter } from "expo-router";
-import { deletePatient, fetchPatients, updatePatient } from "@/api/patient";
-import { fetchPatientConsultations } from "@/api/consultation";
-import { useAuth } from "@/components/context/auth-context";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert, Platform, RefreshControl, ScrollView,
   Text, TextInput, TouchableOpacity, View,
 } from "react-native";
-import { patientRecordsStyles as styles } from "@/styles/patientRecordsStyles";
+import { useRouter } from "expo-router";
+import { useCallback } from "react";
+import { useAuth } from "@/components/context/auth-context";
+import { fetchQueue, addToQueue, removeFromQueue } from "@/api/queue";
+import { createPatient, updatePatient } from "@/api/patient";
+import { fetchPatientConsultations } from "@/api/consultation";
+import { currentQueueStyles as styles } from "@/styles/currentQueueStyles";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
-type PatientRecord = {
-  id: number;
-  lastName: string;
-  firstName: string;
-  gender: "Male" | "Female";
-  birthdate: string;
-  email: string;
-  mobileNumber: string;
-  created_at: string;
+type QueueEntry = {
+  queue_id: number;
+  queued_at: string;
+  patient: {
+    id: number;
+    first_name: string;
+    last_name: string;
+    gender: string;
+    birthdate: string;
+    phone_number: string;
+    email: string;
+  };
 };
 
-export default function PatientRecordsScreen() {
-  const { user, activeClinic } = useAuth();
+export default function CurrentQueueScreen() {
   const router = useRouter();
+  const { user, activeClinic } = useAuth();
 
   const isDoctor = user?.role === "doctor";
 
-  const [editingPatientId, setEditingPatientId] = useState<number | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [patientDatabase, setPatientDatabase] = useState<PatientRecord[]>([]);
+  const [queue, setQueue] = useState<QueueEntry[]>([]);
   const [patientStatusMap, setPatientStatusMap] = useState<Record<number, "new" | "old">>({});
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Form state
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [editingPatientId, setEditingPatientId] = useState<number | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [lastName, setLastName] = useState("");
   const [firstName, setFirstName] = useState("");
   const [gender, setGender] = useState<"Male" | "Female">("Female");
   const [birthdate, setBirthdate] = useState("");
-  const [email, setEmail] = useState("");
-  const [mobileNumber, setMobileNumber] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [dateValue, setDateValue] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [civilStatus, setCivilStatus] = useState<"Single" | "Married" | "Divorced" | "Separated" | "Widowed" | "Minor">("Single");
   const [height, setHeight] = useState("");
   const [weight, setWeight] = useState("");
-  const [allergies, setAllergies] = useState("");
   const [temp, setTemp] = useState("");
   const [bp, setBp] = useState("");
+  const [allergies, setAllergies] = useState("");
+  const [email, setEmail] = useState("");
+  const [mobileNumber, setMobileNumber] = useState("");
 
-  const loadPatients = async (showRefresh = false) => {
+  const loadQueue = async (showRefresh = false) => {
     if (showRefresh) setIsRefreshing(true);
     try {
-      const response = await fetchPatients();
-      const apiData = response.data.data || [];
-      const formattedData = apiData.map((p: any) => ({
-        id: p.id,
-        lastName: p.last_name,
-        firstName: p.first_name,
-        gender: p.gender
-          ? (p.gender.charAt(0).toUpperCase() + p.gender.slice(1)) as "Male" | "Female"
-          : "Female",
-        birthdate: p.birthdate,
-        email: p.email ?? "",
-        mobileNumber: p.phone_number ?? "",
-        created_at: p.created_at,
-      }));
-      setPatientDatabase(formattedData);
+      const res = await fetchQueue();
+      const entries: QueueEntry[] = res.data.data ?? [];
+      setQueue(entries);
 
       // Batch-check consultation history to determine new/old status
       const statusEntries = await Promise.all(
-        formattedData.map(async (p: PatientRecord) => {
+        entries.map(async (entry) => {
           try {
-            const cRes = await fetchPatientConsultations(p.id);
+            const cRes = await fetchPatientConsultations(entry.patient.id);
             const consultations = cRes.data.data ?? [];
-            return [p.id, consultations.length > 0 ? "old" : "new"] as const;
+            return [entry.patient.id, consultations.length > 0 ? "old" : "new"] as const;
           } catch {
-            return [p.id, "new"] as const;
+            return [entry.patient.id, "new"] as const;
           }
         })
       );
       setPatientStatusMap(Object.fromEntries(statusEntries));
-    } catch (error) {
-      console.error("Error fetching patients:", error);
-      Alert.alert("Network Error", "Could not load patients. Check your connection.");
+    } catch {
+      Alert.alert("Error", "Could not load queue.");
     } finally {
       if (showRefresh) setIsRefreshing(false);
     }
   };
 
   useEffect(() => {
-    if (user) loadPatients();
-  }, [user]);
+    if (user && activeClinic) loadQueue();
+  }, [user, activeClinic]);
 
-  const displayedPatients = useMemo(() => {
-    const q = searchQuery.toLowerCase();
-    return patientDatabase
-      .filter((p) =>
-        `${p.firstName} ${p.lastName}`.toLowerCase().includes(q) ||
-        `${p.lastName} ${p.firstName}`.toLowerCase().includes(q)
-      )
-      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-  }, [patientDatabase, searchQuery]);
+  const filteredQueue = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return queue;
+    return queue.filter((entry) =>
+      entry.patient.first_name.toLowerCase().includes(q) ||
+      entry.patient.last_name.toLowerCase().includes(q)
+    );
+  }, [queue, searchQuery]);
 
-  const openEditForm = (patient: PatientRecord) => {
-    setLastName(patient.lastName);
-    setFirstName(patient.firstName);
-    setGender(patient.gender);
-    setBirthdate(patient.birthdate);
-    setEmail(patient.email);
-    setMobileNumber(patient.mobileNumber);
-    const parsedDate = Date.parse(patient.birthdate);
-    setDateValue(!isNaN(parsedDate) ? new Date(parsedDate) : new Date());
-    setCivilStatus("Single"); setHeight(""); setWeight(""); setAllergies("");
-    setTemp(""); setBp("");
-    setEditingPatientId(patient.id);
-    setIsEditing(true);
+  const resetForm = () => {
+    setEditingPatientId(null);
+    setLastName(""); setFirstName(""); setGender("Female");
+    setBirthdate(""); setDateValue(new Date());
+    setCivilStatus("Single"); setHeight(""); setWeight("");
+    setTemp(""); setBp(""); setAllergies("");
+    setEmail(""); setMobileNumber("");
   };
 
-  const handleClearField = (field: "lastName" | "firstName") => {
-    if (field === "lastName") setLastName("");
-    if (field === "firstName") setFirstName("");
+  const openAddForm = () => {
+    resetForm();
+    setShowAddForm(true);
+  };
+
+  const openEditForm = (entry: QueueEntry) => {
+    const p = entry.patient;
+    setEditingPatientId(p.id);
+    setLastName(p.last_name);
+    setFirstName(p.first_name);
+    setGender(
+      p.gender
+        ? ((p.gender.charAt(0).toUpperCase() + p.gender.slice(1)) as "Male" | "Female")
+        : "Female"
+    );
+    setBirthdate(p.birthdate ?? "");
+    const parsed = Date.parse(p.birthdate);
+    setDateValue(!isNaN(parsed) ? new Date(parsed) : new Date());
+    setCivilStatus("Single"); setHeight(""); setWeight("");
+    setTemp(""); setBp(""); setAllergies("");
+    setEmail(p.email ?? "");
+    setMobileNumber(p.phone_number ?? "");
+    setShowAddForm(true);
   };
 
   const onDateChange = (event: any, selectedDate?: Date) => {
@@ -132,16 +139,15 @@ export default function PatientRecordsScreen() {
     }
   };
 
-  const handleSaveEdit = async () => {
+  const handleSaveAndAddToQueue = async () => {
     if (!lastName.trim() || !firstName.trim() || !birthdate.trim()) {
       Alert.alert("Missing Fields", "Please complete the patient's name and birthdate.");
       return;
     }
     if (!activeClinic) {
-      Alert.alert("No Clinic Selected", "Please select a clinic before saving.");
+      Alert.alert("No Clinic Selected", "Please select a clinic before adding a patient.");
       return;
     }
-    if (!editingPatientId) return;
 
     setIsSubmitting(true);
     const payload = {
@@ -161,35 +167,66 @@ export default function PatientRecordsScreen() {
     };
 
     try {
-      await updatePatient(editingPatientId, payload);
-      Alert.alert("Success", `Patient data for ${firstName} ${lastName} has been updated.`, [
-        { text: "OK", onPress: () => { setIsEditing(false); loadPatients(); } },
-      ]);
+      if (editingPatientId) {
+        // Edit existing patient — update only, no re-queue
+        await updatePatient(editingPatientId, payload);
+        setShowAddForm(false);
+        await loadQueue();
+        Alert.alert("Updated", `Patient record for ${firstName} ${lastName} has been updated.`);
+      } else {
+        // New patient — create then add to queue
+        const response = await createPatient(payload);
+        const newPatient = response.data.patient;
+        await addToQueue(newPatient.id);
+        setShowAddForm(false);
+        await loadQueue();
+
+        if (isDoctor) {
+          // Doctor goes straight to prescription
+          // Re-fetch queue to get the queue_id for the newly added patient
+          const freshQueue = await fetchQueue();
+          const freshEntries: QueueEntry[] = freshQueue.data.data ?? [];
+          const matchedEntry = freshEntries.find((e) => e.patient.id === newPatient.id);
+          router.push({
+            pathname: "/consultations/createPrescription",
+            params: {
+              patientId: newPatient.id.toString(),
+              patientName: `${newPatient.last_name}, ${newPatient.first_name}`,
+              patientGender: newPatient.gender,
+              patientBirthdate: newPatient.birthdate,
+              queueId: matchedEntry ? matchedEntry.queue_id.toString() : "",
+            },
+          });
+        } else {
+          // Assistant stays in queue
+          Alert.alert("Success", `${firstName} ${lastName} has been added to the queue.`);
+        }
+      }
     } catch (err: any) {
-      const serverMessage =
+      const msg =
         err?.response?.data?.message ||
         (Object.values(err?.response?.data?.errors ?? {}) as string[][])?.[0]?.[0] ||
-        "Failed to communicate with the server.";
-      Alert.alert("Submission Error", serverMessage);
+        "Could not save patient.";
+      Alert.alert("Error", msg);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleDeletePatient = (patientId: number, name: string) => {
+  const handleRemoveFromQueue = (queueId: number, name: string) => {
     Alert.alert(
-      "Delete Patient",
-      `Are you sure you want to permanently remove the file records for ${name}?`,
+      "Remove from Queue",
+      `Remove ${name} from today's queue?`,
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Delete", style: "destructive",
+          text: "Remove", style: "destructive",
           onPress: async () => {
             try {
-              await deletePatient(patientId);
-              await loadPatients();
+              await removeFromQueue(queueId);
+              await loadQueue();
             } catch {
-              Alert.alert("Error", "Could not delete patient. Please try again.");
+              Alert.alert("Error", "Could not remove patient from queue.");
             }
           },
         },
@@ -197,8 +234,22 @@ export default function PatientRecordsScreen() {
     );
   };
 
-  // --- VIEW RENDER 1: Edit Form (doctor and assistant can edit) ---
-  if (isEditing) {
+  const handleCardPress = (entry: QueueEntry) => {
+    if (!isDoctor) return; // Assistants cannot start a prescription
+    router.push({
+      pathname: "/consultations/createPrescription",
+      params: {
+        patientId: entry.patient.id.toString(),
+        patientName: `${entry.patient.last_name}, ${entry.patient.first_name}`,
+        patientGender: entry.patient.gender,
+        patientBirthdate: entry.patient.birthdate,
+        queueId: entry.queue_id.toString(),
+      },
+    });
+  };
+
+  // ─── VIEW: Add / Edit Patient Form ───────────────────────────────────────
+  if (showAddForm) {
     return (
       <View style={styles.container}>
         <ScrollView
@@ -206,7 +257,9 @@ export default function PatientRecordsScreen() {
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.promptHeadline}>Edit Patient Details</Text>
+          <Text style={styles.promptHeadline}>
+            {editingPatientId ? "Edit Patient Details" : "Input the details of your patient"}
+          </Text>
 
           {/* Last Name */}
           <View style={styles.fieldWrapper}>
@@ -220,7 +273,7 @@ export default function PatientRecordsScreen() {
                 placeholderTextColor="#94a3b8"
               />
               {lastName.length > 0 && (
-                <TouchableOpacity onPress={() => handleClearField("lastName")} style={styles.clearBtnClick}>
+                <TouchableOpacity onPress={() => setLastName("")} style={styles.clearBtnClick}>
                   <Text style={styles.clearBtnSymbol}>×</Text>
                 </TouchableOpacity>
               )}
@@ -239,7 +292,7 @@ export default function PatientRecordsScreen() {
                 placeholderTextColor="#94a3b8"
               />
               {firstName.length > 0 && (
-                <TouchableOpacity onPress={() => handleClearField("firstName")} style={styles.clearBtnClick}>
+                <TouchableOpacity onPress={() => setFirstName("")} style={styles.clearBtnClick}>
                   <Text style={styles.clearBtnSymbol}>×</Text>
                 </TouchableOpacity>
               )}
@@ -428,24 +481,42 @@ export default function PatientRecordsScreen() {
               />
             </View>
           </View>
+
+          {/* Info Alert */}
+          <View style={styles.infoAlertContainerBox}>
+            <Text style={styles.infoBadgeIndicatorIcon}>ⓘ</Text>
+            <View style={styles.infoAlertContentBodyTextGroup}>
+              <Text style={styles.infoAlertMessageTextInline}>
+                We will send a copy of the prescription to your patient's email or mobile number.
+              </Text>
+              <Text style={styles.infoAlertSubtextInline}>
+                If email or mobile number is not available, you may still continue and send it using other sharing options.
+              </Text>
+            </View>
+          </View>
         </ScrollView>
 
+        {/* Bottom Action Bar */}
         <View style={styles.bottomActionBarWrapper}>
           <TouchableOpacity
             style={styles.cancelBtn}
-            onPress={() => setIsEditing(false)}
+            onPress={() => setShowAddForm(false)}
             activeOpacity={0.8}
           >
             <Text style={styles.cancelBtnText}>Cancel</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.nextActionButtonCall, isSubmitting && { backgroundColor: "#82b27a" }]}
-            onPress={handleSaveEdit}
+            onPress={handleSaveAndAddToQueue}
             disabled={isSubmitting}
             activeOpacity={0.9}
           >
             <Text style={styles.nextActionButtonLabelText}>
-              {isSubmitting ? "SAVING..." : "SAVE CHANGES"}
+              {isSubmitting
+                ? "PROCESSING..."
+                : editingPatientId
+                ? "SAVE CHANGES"
+                : "ADD TO QUEUE"}
             </Text>
           </TouchableOpacity>
         </View>
@@ -453,24 +524,26 @@ export default function PatientRecordsScreen() {
     );
   }
 
-  // --- VIEW RENDER 2: Patient History List ---
+  // ─── VIEW: Main Queue List ────────────────────────────────────────────────
   return (
     <View style={styles.container}>
       <ScrollView
         style={styles.scroller}
         contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
-            onRefresh={() => loadPatients(true)}
+            onRefresh={() => loadQueue(true)}
             tintColor="#095c29"
           />
         }
       >
+        {/* Search */}
         <View style={styles.searchBarWrapper}>
           <TextInput
             style={styles.searchBarInput}
-            placeholder="Search patients by name..."
+            placeholder="Search queue by name..."
             placeholderTextColor="#94a3b8"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -482,71 +555,91 @@ export default function PatientRecordsScreen() {
           )}
         </View>
 
+        {/* Header */}
         <View style={styles.listHeaderRow}>
           <Text style={styles.promptHeadline}>
-            Patient Records <Text style={styles.patientCount}>({displayedPatients.length})</Text>
+            Today's Queue{" "}
+            <Text style={styles.patientCount}>({filteredQueue.length})</Text>
           </Text>
+          <TouchableOpacity style={styles.addPatientBtn} onPress={openAddForm}>
+            <Text style={styles.addPatientBtnText}>+ Add Patient</Text>
+          </TouchableOpacity>
         </View>
 
-        {displayedPatients.length === 0 ? (
+        {filteredQueue.length === 0 ? (
           <Text style={styles.emptyText}>
-            {searchQuery ? "No patients match your search." : "No patient records found."}
+            {searchQuery ? "No patients match your search." : "No patients in queue today."}
           </Text>
         ) : (
-          displayedPatients.map((patient) => (
+          filteredQueue.map((entry, index) => (
             <TouchableOpacity
-              key={patient.id}
+              key={entry.queue_id}
               style={styles.patientCard}
-              onPress={() => router.push(`/patient-records/${patient.id}`)}
-              activeOpacity={0.75}
+              onPress={() => handleCardPress(entry)}
+              activeOpacity={isDoctor ? 0.75 : 1}
             >
+              {/* Queue number badge */}
+              <View style={styles.queueBadge}>
+                <Text style={styles.queueBadgeText}>{index + 1}</Text>
+              </View>
+
               <View style={styles.cardInfoGroup}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                  <Text style={styles.cardNameText}>{patient.lastName}, {patient.firstName}</Text>
-                  {patientStatusMap[patient.id] !== undefined && (
+                  <Text style={styles.cardNameText}>
+                    {entry.patient.last_name}, {entry.patient.first_name}
+                  </Text>
+                  {patientStatusMap[entry.patient.id] !== undefined && (
                     <View style={{
                       paddingHorizontal: 7,
                       paddingVertical: 2,
                       borderRadius: 6,
-                      backgroundColor: patientStatusMap[patient.id] === "new" ? "#dcfce7" : "#f1f5f9",
+                      backgroundColor: patientStatusMap[entry.patient.id] === "new" ? "#dcfce7" : "#f1f5f9",
                       borderWidth: 1,
-                      borderColor: patientStatusMap[patient.id] === "new" ? "#86efac" : "#cbd5e1",
+                      borderColor: patientStatusMap[entry.patient.id] === "new" ? "#86efac" : "#cbd5e1",
                     }}>
                       <Text style={{
                         fontSize: 11,
                         fontWeight: "700",
-                        color: patientStatusMap[patient.id] === "new" ? "#166534" : "#475569",
+                        color: patientStatusMap[entry.patient.id] === "new" ? "#166534" : "#475569",
                       }}>
-                        {patientStatusMap[patient.id] === "new" ? "new" : "old"}
+                        {patientStatusMap[entry.patient.id] === "new" ? "new" : "old"}
                       </Text>
                     </View>
                   )}
                 </View>
-                <Text style={styles.cardSubDetails}>{patient.gender} • DOB: {patient.birthdate}</Text>
-                {patient.mobileNumber ? (
-                  <Text style={styles.cardSubDetails}>📱 +63 {patient.mobileNumber}</Text>
+                <Text style={styles.cardSubDetails}>
+                  {entry.patient.gender
+                    ? entry.patient.gender.charAt(0).toUpperCase() + entry.patient.gender.slice(1)
+                    : "—"}{" "}
+                  • DOB: {entry.patient.birthdate}
+                </Text>
+                {entry.patient.phone_number ? (
+                  <Text style={styles.cardSubDetails}>📱 +63 {entry.patient.phone_number}</Text>
                 ) : null}
+                {isDoctor && (
+                  <Text style={styles.cardSubDetails}>Tap to start prescription →</Text>
+                )}
               </View>
-              <View style={styles.cardActionsGroup}>
-                {/* Both doctor and assistant can edit */}
+
+              <View style={[styles.cardActionsGroup, { flexDirection: "column" }]}>
                 <TouchableOpacity
                   style={styles.editButton}
-                  onPress={(e) => { e.stopPropagation(); openEditForm(patient); }}
+                  onPress={(e) => { e.stopPropagation(); openEditForm(entry); }}
                 >
                   <Text style={styles.editButtonText}>Edit</Text>
                 </TouchableOpacity>
-                {/* Only doctor can delete */}
-                {isDoctor && (
-                  <TouchableOpacity
-                    style={styles.deleteButton}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      handleDeletePatient(patient.id, `${patient.firstName} ${patient.lastName}`);
-                    }}
-                  >
-                    <Text style={styles.deleteButtonText}>Delete</Text>
-                  </TouchableOpacity>
-                )}
+                <TouchableOpacity
+                  style={styles.removeBtn}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleRemoveFromQueue(
+                      entry.queue_id,
+                      `${entry.patient.first_name} ${entry.patient.last_name}`
+                    );
+                  }}
+                >
+                  <Text style={styles.removeBtnText}>Remove</Text>
+                </TouchableOpacity>
               </View>
             </TouchableOpacity>
           ))
