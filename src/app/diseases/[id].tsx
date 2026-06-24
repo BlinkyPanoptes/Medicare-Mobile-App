@@ -3,15 +3,15 @@ import { useAuth } from "@/components/context/auth-context";
 import { useLocalSearchParams, useNavigation } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    RefreshControl,
-    ScrollView,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import styles from "@/styles/diseasesStyles";
 
 type Prescription = {
   id: number;
@@ -362,3 +362,77 @@ export default function DiseaseDetailScreen() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#f5f7fb" },
+  centered: { flex: 1, justifyContent: "center", alignItems: "center" },
+  content: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 40 },
+
+  // Disease card
+  diseaseCard: { backgroundColor: "#ffffff", borderRadius: 14, borderWidth: 1, borderColor: "#e2e8f0", padding: 18, marginBottom: 16 },
+  diseaseName: { fontSize: 20, fontWeight: "700", color: "#0f172a", marginBottom: 6 },
+  diseaseDescription: { fontSize: 14, color: "#64748b", marginBottom: 10, lineHeight: 20 },
+  archivedBadge: { backgroundColor: "#fee2e2", borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4, alignSelf: "flex-start", marginBottom: 10 },
+  archivedBadgeText: { fontSize: 12, fontWeight: "700", color: "#ef4444" },
+  countRow: { flexDirection: "row", alignItems: "center", marginTop: 8 },
+  countCard: { flex: 1, alignItems: "center" },
+  countNumber: { fontSize: 22, fontWeight: "700", color: "#095c29" },
+  countLabel: { fontSize: 12, color: "#64748b", marginTop: 2 },
+  countDivider: { width: 1, height: 36, backgroundColor: "#e2e8f0" },
+
+  // Filter tabs
+  filterScroll: { marginBottom: 12 },
+  filterRow: { gap: 8, paddingHorizontal: 0, paddingVertical: 4 },
+  filterTab: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, borderWidth: 1, borderColor: "#e2e8f0", backgroundColor: "#ffffff" },
+  filterTabActive: { backgroundColor: "#095c29", borderColor: "#095c29" },
+  filterTabText: { fontSize: 13, fontWeight: "600", color: "#64748b" },
+  filterTabTextActive: { color: "#ffffff" },
+
+  // Section title
+  sectionTitle: { fontSize: 14, fontWeight: "600", color: "#64748b", marginBottom: 10 },
+
+  // Patient cards
+  patientCard: { backgroundColor: "#ffffff", borderRadius: 14, borderWidth: 1, borderColor: "#e2e8f0", marginBottom: 10, overflow: "hidden" },
+  patientCardHeader: { flexDirection: "row", alignItems: "center", padding: 14, gap: 12 },
+  avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: "#dcfce7", justifyContent: "center", alignItems: "center" },
+  avatarText: { fontSize: 14, fontWeight: "700", color: "#095c29" },
+  patientInfo: { flex: 1, gap: 2 },
+  patientName: { fontSize: 15, fontWeight: "700", color: "#0f172a" },
+  patientSub: { fontSize: 13, color: "#64748b" },
+  diagnosedDate: { fontSize: 12, color: "#94a3b8", marginTop: 2 },
+  badgeCol: { alignItems: "flex-end", gap: 4 },
+  typeBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  typePrimary: { backgroundColor: "#dbeafe" },
+  typeSecondary: { backgroundColor: "#f3e8ff" },
+  typeBadgeText: { fontSize: 11, fontWeight: "700", color: "#1e3a5f" },
+  statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  statusOngoing: { backgroundColor: "#fef3c7" },
+  statusTreated: { backgroundColor: "#dcfce7" },
+  statusReferred: { backgroundColor: "#e0e7ff" },
+  statusBadgeText: { fontSize: 11, fontWeight: "700", color: "#334155" },
+  expandChevron: { fontSize: 12, color: "#94a3b8", marginTop: 4 },
+
+  // Expanded body
+  expandedBody: { paddingHorizontal: 14, paddingBottom: 16, borderTopWidth: 1, borderTopColor: "#f1f5f9" },
+  symptomsBox: { backgroundColor: "#fafafa", borderRadius: 8, padding: 12, marginTop: 12, borderWidth: 1, borderColor: "#f1f5f9" },
+  symptomsLabel: { fontSize: 12, fontWeight: "600", color: "#64748b", marginBottom: 4 },
+  symptomsText: { fontSize: 14, color: "#334155", lineHeight: 20 },
+
+  // Prescriptions
+  rxTitle: { fontSize: 13, fontWeight: "600", color: "#475569", marginTop: 14, marginBottom: 8 },
+  rxEmpty: { fontSize: 13, color: "#94a3b8", fontStyle: "italic" },
+  rxCard: { backgroundColor: "#f8fafc", borderRadius: 8, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: "#e2e8f0" },
+  rxBrand: { fontSize: 14, fontWeight: "700", color: "#0f172a", marginBottom: 2 },
+  rxGeneric: { fontSize: 13, color: "#64748b", marginBottom: 4 },
+  rxDetail: { fontSize: 13, fontWeight: "600", color: "#334155" },
+
+  // Status update
+  statusUpdateBox: { marginTop: 14 },
+  statusUpdateLabel: { fontSize: 13, fontWeight: "600", color: "#475569", marginBottom: 8 },
+  statusBtnRow: { flexDirection: "row", gap: 8 },
+  statusBtn: { flex: 1, paddingVertical: 9, borderRadius: 8, borderWidth: 1.5, borderColor: "#e2e8f0", alignItems: "center", backgroundColor: "#f8fafc" },
+  statusBtnActive: { backgroundColor: "#095c29", borderColor: "#095c29" },
+  statusBtnDisabled: { opacity: 0.5 },
+  statusBtnText: { fontSize: 13, fontWeight: "600", color: "#64748b" },
+  statusBtnTextActive: { color: "#ffffff" },
+});

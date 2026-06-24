@@ -1,5 +1,6 @@
 import { createBrand } from "@/api/brand";
 import apiClient from "@/api/client";
+import { getPrescriptionPdfSignedUrl } from "@/api/consultation";
 import { createDisease, fetchDiseases } from "@/api/disease";
 import { createGeneric } from "@/api/generic";
 import { removeFromQueue } from "@/api/queue";
@@ -10,6 +11,7 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -482,7 +484,7 @@ const handleCreateBrand = async () => {
     }
   };
 
-  // — Submit —
+  // — 
   const handleSubmit = async () => {
     if (medications.length === 0) {
       Alert.alert("No Medications", "Please add at least one medication.");
@@ -519,7 +521,7 @@ const handleCreateBrand = async () => {
         })),
       };
 
-      await apiClient.post("/consultations", payload);
+      const res = await apiClient.post("/consultations", payload);
 
       // Remove patient from queue now that prescription is saved
       if (queueId) {
@@ -531,9 +533,35 @@ const handleCreateBrand = async () => {
         }
       }
 
-      Alert.alert("Success", "Consultation and prescription saved.", [
-        { text: "OK", onPress: () => router.back() },
-      ]);
+      const savedConsultation = res.data.consultation;
+
+      Alert.alert(
+        "Consultation Saved",
+        "Would you like to print the prescription?",
+        [
+          {
+            text: "No",
+            style: "cancel",
+            onPress: () => router.back(),
+          },
+          {
+            text: "Yes, Print",
+            onPress: async () => {
+              try {
+                const signedRes = await getPrescriptionPdfSignedUrl(
+                  savedConsultation.id
+                );
+                const url = signedRes.data.url;
+                // Open in device browser — doctor can print from there
+                await Linking.openURL(url);
+              } catch {
+                Alert.alert("Error", "Could not generate prescription PDF.");
+              }
+              router.back();
+            },
+          },
+        ]
+      );
     } catch (err: any) {
       const message =
         err?.response?.data?.message ||
