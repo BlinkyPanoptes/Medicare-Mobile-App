@@ -1,7 +1,10 @@
+import { createBrand } from "@/api/brand";
 import apiClient from "@/api/client";
 import { createDisease, fetchDiseases } from "@/api/disease";
+import { createGeneric } from "@/api/generic";
 import { removeFromQueue } from "@/api/queue";
 import { useAuth } from "@/components/context/auth-context";
+import { createPrescriptionStyles as styles } from "@/styles/createPrescriptionStyles";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -15,7 +18,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { createPrescriptionStyles as styles } from "@/styles/createPrescriptionStyles";
 
 // — Types —
 type Brand = {
@@ -137,7 +139,15 @@ export default function CreatePrescriptionScreen() {
   const [instructions, setInstructions] = useState("");
   const [genericPickerVisible, setGenericPickerVisible] = useState(false);
   const [brandPickerVisible, setBrandPickerVisible] = useState(false);
-  const [genericSearch, setGenericSearch] = useState("");
+  const [genericSearch, setGenericSearch] = useState("");// — Inline create generic —
+  const [showCreateGeneric, setShowCreateGeneric] = useState(false);
+  const [newGenericName, setNewGenericName] = useState("");
+  const [creatingGeneric, setCreatingGeneric] = useState(false);
+
+  // — Inline create brand —
+  const [showCreateBrand, setShowCreateBrand] = useState(false);
+  const [newBrandName, setNewBrandName] = useState("");
+  const [creatingBrand, setCreatingBrand] = useState(false);
 
   // — Disease modal —
   const [diseaseModalVisible, setDiseaseModalVisible] = useState(false);
@@ -211,6 +221,10 @@ export default function CreatePrescriptionScreen() {
     setFrequency("");
     setDuration("");
     setInstructions("");
+    setShowCreateGeneric(false);   
+    setShowCreateBrand(false);     
+    setNewGenericName("");         
+    setNewBrandName(""); 
     setModalVisible(true);
   };
 
@@ -265,6 +279,78 @@ export default function CreatePrescriptionScreen() {
       },
     ]);
   };
+
+  const handleCreateGeneric = async () => {
+  if (!newGenericName.trim()) {
+    Alert.alert("Missing Field", "Generic name is required.");
+    return;
+  }
+  setCreatingGeneric(true);
+  try {
+    const res = await createGeneric({ generic_name: newGenericName.trim() });
+    const created: Generic = { ...res.data.generic, brands: [] };
+
+    // Add to local list and auto-select
+    setGenerics((prev) => [...prev, created]);
+    setSelectedGeneric(created);
+    setSelectedBrand(null);
+
+    // Reset form and go back to picker
+    setNewGenericName("");
+    setShowCreateGeneric(false);
+    setGenericPickerVisible(false);
+
+    // Open brand picker immediately so the flow continues
+    setBrandPickerVisible(true);
+  } catch (err: any) {
+    const msg =
+      err?.response?.data?.message ||
+      (Object.values(err?.response?.data?.errors ?? {}) as string[][])?.[0]?.[0] ||
+      "Could not create generic.";
+    Alert.alert("Error", msg);
+  } finally {
+    setCreatingGeneric(false);
+  }
+};
+
+const handleCreateBrand = async () => {
+  if (!selectedGeneric) {
+    Alert.alert("Error", "No generic selected.");
+    return;
+  }
+  if (!newBrandName.trim()) {
+    Alert.alert("Missing Field", "Brand name is required.");
+    return;
+  }
+  setCreatingBrand(true);
+  try {
+    const res = await createBrand({
+      generic_id: selectedGeneric.id,
+      brand_name: newBrandName.trim(),
+    });
+    const created: Brand & { generic_id: number } = {
+      ...res.data.brand,
+      generic_id: selectedGeneric.id,
+    };
+
+    // Add to local brands list and auto-select
+    setBrands((prev) => [...prev, created]);
+    setSelectedBrand(created);
+
+    // Reset form and close picker
+    setNewBrandName("");
+    setShowCreateBrand(false);
+    setBrandPickerVisible(false);
+  } catch (err: any) {
+    const msg =
+      err?.response?.data?.message ||
+      (Object.values(err?.response?.data?.errors ?? {}) as string[][])?.[0]?.[0] ||
+      "Could not create brand.";
+    Alert.alert("Error", msg);
+  } finally {
+    setCreatingBrand(false);
+  }
+};
 
   // — Disease handlers —
   const openAddDiseaseModal = () => {
@@ -744,43 +830,106 @@ export default function CreatePrescriptionScreen() {
         visible={genericPickerVisible}
         transparent
         animationType="slide"
-        onRequestClose={() => setGenericPickerVisible(false)}
+        onRequestClose={() => {
+          setGenericPickerVisible(false);
+          setShowCreateGeneric(false);
+          setNewGenericName("");
+        }}
       >
-        <Pressable style={styles.modalBackdrop} onPress={() => setGenericPickerVisible(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => {
+          setGenericPickerVisible(false);
+          setShowCreateGeneric(false);
+          setNewGenericName("");
+        }}>
           <Pressable style={styles.modalSheet} onPress={() => {}}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Select Generic</Text>
-            <TextInput
-              style={styles.pickerSearch}
-              placeholder="Search generics..."
-              placeholderTextColor="#94a3b8"
-              value={genericSearch}
-              onChangeText={setGenericSearch}
-            />
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 340 }}>
-              {filteredGenerics.map((g) => (
+
+            {!showCreateGeneric ? (
+              <>
+                <Text style={styles.modalTitle}>Select Generic</Text>
+                <TextInput
+                  style={styles.pickerSearch}
+                  placeholder="Search generics..."
+                  placeholderTextColor="#94a3b8"
+                  value={genericSearch}
+                  onChangeText={setGenericSearch}
+                />
+                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 300 }}>
+                  {filteredGenerics.length === 0 ? (
+                    <Text style={styles.emptyMedText}>No generics found.</Text>
+                  ) : (
+                    filteredGenerics.map((g) => (
+                      <TouchableOpacity
+                        key={g.id}
+                        style={[
+                          styles.pickerItem,
+                          selectedGeneric?.id === g.id && styles.pickerItemSelected,
+                        ]}
+                        onPress={() => {
+                          setSelectedGeneric(g);
+                          setSelectedBrand(null);
+                          setGenericSearch("");
+                          setGenericPickerVisible(false);
+                          setBrandPickerVisible(true); // auto-open brand picker
+                        }}
+                      >
+                        <Text style={[
+                          styles.pickerItemText,
+                          selectedGeneric?.id === g.id && styles.pickerItemTextSelected,
+                        ]}>
+                          {g.generic_name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </ScrollView>
+
+                {/* Create new generic shortcut */}
                 <TouchableOpacity
-                  key={g.id}
-                  style={[
-                    styles.pickerItem,
-                    selectedGeneric?.id === g.id && styles.pickerItemSelected,
-                  ]}
+                  style={[styles.modalSaveBtn, { backgroundColor: "#f0fdf4", marginTop: 12 }]}
                   onPress={() => {
-                    setSelectedGeneric(g);
-                    setSelectedBrand(null);
                     setGenericSearch("");
-                    setGenericPickerVisible(false);
+                    setShowCreateGeneric(true);
                   }}
                 >
-                  <Text style={[
-                    styles.pickerItemText,
-                    selectedGeneric?.id === g.id && styles.pickerItemTextSelected,
-                  ]}>
-                    {g.generic_name}
+                  <Text style={[styles.modalSaveBtnText, { color: "#095c29" }]}>
+                    + Create New Generic
                   </Text>
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
+              </>
+            ) : (
+              <>
+                {/* Inline create generic form */}
+                <View style={styles.createDiseaseHeader}>
+                  <Text style={styles.modalTitle}>New Generic</Text>
+                  <TouchableOpacity onPress={() => {
+                    setShowCreateGeneric(false);
+                    setNewGenericName("");
+                  }}>
+                    <Text style={styles.cancelCreateText}>← Back</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={styles.modalFieldLabel}>Generic Name *</Text>
+                <TextInput
+                  style={styles.modalFieldInput}
+                  value={newGenericName}
+                  onChangeText={setNewGenericName}
+                  placeholder="e.g. Paracetamol"
+                  placeholderTextColor="#94a3b8"
+                />
+
+                <TouchableOpacity
+                  style={[styles.modalSaveBtn, { marginTop: 16 }, creatingGeneric && { opacity: 0.6 }]}
+                  onPress={handleCreateGeneric}
+                  disabled={creatingGeneric}
+                >
+                  <Text style={styles.modalSaveBtnText}>
+                    {creatingGeneric ? "Creating..." : "Create Generic"}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
           </Pressable>
         </Pressable>
       </Modal>
@@ -790,37 +939,104 @@ export default function CreatePrescriptionScreen() {
         visible={brandPickerVisible}
         transparent
         animationType="slide"
-        onRequestClose={() => setBrandPickerVisible(false)}
+        onRequestClose={() => {
+          setBrandPickerVisible(false);
+          setShowCreateBrand(false);
+          setNewBrandName("");
+        }}
       >
-        <Pressable style={styles.modalBackdrop} onPress={() => setBrandPickerVisible(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => {
+          setBrandPickerVisible(false);
+          setShowCreateBrand(false);
+          setNewBrandName("");
+        }}>
           <Pressable style={styles.modalSheet} onPress={() => {}}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Select Brand</Text>
-            <Text style={styles.pickerSubtitle}>
-              Brands for: {selectedGeneric?.generic_name}
-            </Text>
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 340 }}>
-              {filteredBrands.map((b) => (
+
+            {!showCreateBrand ? (
+              <>
+                <Text style={styles.modalTitle}>Select Brand</Text>
+                <Text style={styles.pickerSubtitle}>
+                  Brands for: {selectedGeneric?.generic_name}
+                </Text>
+                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 300 }}>
+                  {filteredBrands.length === 0 ? (
+                    <Text style={styles.emptyMedText}>
+                      No brands found for this generic.
+                    </Text>
+                  ) : (
+                    filteredBrands.map((b) => (
+                      <TouchableOpacity
+                        key={b.id}
+                        style={[
+                          styles.pickerItem,
+                          selectedBrand?.id === b.id && styles.pickerItemSelected,
+                        ]}
+                        onPress={() => {
+                          setSelectedBrand(b);
+                          setBrandPickerVisible(false);
+                        }}
+                      >
+                        <Text style={[
+                          styles.pickerItemText,
+                          selectedBrand?.id === b.id && styles.pickerItemTextSelected,
+                        ]}>
+                          {b.brand_name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </ScrollView>
+
+                {/* Create new brand shortcut */}
                 <TouchableOpacity
-                  key={b.id}
-                  style={[
-                    styles.pickerItem,
-                    selectedBrand?.id === b.id && styles.pickerItemSelected,
-                  ]}
+                  style={[styles.modalSaveBtn, { backgroundColor: "#f0fdf4", marginTop: 12 }]}
                   onPress={() => {
-                    setSelectedBrand(b);
-                    setBrandPickerVisible(false);
+                    setShowCreateBrand(true);
                   }}
                 >
-                  <Text style={[
-                    styles.pickerItemText,
-                    selectedBrand?.id === b.id && styles.pickerItemTextSelected,
-                  ]}>
-                    {b.brand_name}
+                  <Text style={[styles.modalSaveBtnText, { color: "#095c29" }]}>
+                    + Create New Brand
                   </Text>
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
+              </>
+            ) : (
+              <>
+                {/* Inline create brand form */}
+                <View style={styles.createDiseaseHeader}>
+                  <Text style={styles.modalTitle}>New Brand</Text>
+                  <TouchableOpacity onPress={() => {
+                    setShowCreateBrand(false);
+                    setNewBrandName("");
+                  }}>
+                    <Text style={styles.cancelCreateText}>← Back</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={styles.modalFieldLabel}>
+                  Generic: {selectedGeneric?.generic_name}
+                </Text>
+
+                <Text style={[styles.modalFieldLabel, { marginTop: 12 }]}>Brand Name *</Text>
+                <TextInput
+                  style={styles.modalFieldInput}
+                  value={newBrandName}
+                  onChangeText={setNewBrandName}
+                  placeholder="e.g. Biogesic"
+                  placeholderTextColor="#94a3b8"
+                />
+
+                <TouchableOpacity
+                  style={[styles.modalSaveBtn, { marginTop: 16 }, creatingBrand && { opacity: 0.6 }]}
+                  onPress={handleCreateBrand}
+                  disabled={creatingBrand}
+                >
+                  <Text style={styles.modalSaveBtnText}>
+                    {creatingBrand ? "Creating..." : "Create Brand & Select"}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
           </Pressable>
         </Pressable>
       </Modal>
