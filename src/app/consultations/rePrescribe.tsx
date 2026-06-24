@@ -6,7 +6,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  RefreshControl,
   ScrollView,
   Text,
   TextInput,
@@ -44,6 +43,7 @@ type ActiveDiagnosis = {
   consultation_id: number;
 };
 
+// Update existing Consultation type to include diseases
 type Consultation = {
   id: number;
   consultation_date: string;
@@ -61,55 +61,39 @@ type Consultation = {
   }[];
 };
 
+
+
 export default function ReprescribeScreen() {
   const router = useRouter();
 
   const [patients, setPatients] = useState<Patient[]>([]);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Per-patient loading state when tapping a patient card
   const [loadingPatientId, setLoadingPatientId] = useState<number | null>(null);
 
-  const loadPatients = async (showRefresh = false) => {
-    if (showRefresh) setIsRefreshing(true);
-    else setIsLoading(true);
-    try {
-      const res = await fetchPatients();
-      const allPatients: Patient[] = res.data.data ?? res.data;
-
-      // Only show patients who have at least one consultation (old patients)
-      const consultationChecks = await Promise.all(
-        allPatients.map(async (p) => {
-          try {
-            const cRes = await fetchPatientConsultations(p.id);
-            const consultations = cRes.data.data ?? [];
-            return consultations.length > 0 ? p : null;
-          } catch {
-            return null;
-          }
-        })
-      );
-
-      setPatients(consultationChecks.filter((p): p is Patient => p !== null));
-    } catch {
-      Alert.alert("Error", "Could not load patients.");
-    } finally {
-      if (showRefresh) setIsRefreshing(false);
-      else setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
-    loadPatients();
+    const load = async () => {
+      try {
+        const res = await fetchPatients();
+        setPatients(res.data.data ?? res.data);
+      } catch {
+        Alert.alert("Error", "Could not load patients.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
   }, []);
 
   const filteredPatients = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return patients;
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return patients;
     return patients.filter(
       (p) =>
-        p.first_name.toLowerCase().includes(q) ||
-        p.last_name.toLowerCase().includes(q),
+        p.first_name.toLowerCase().includes(query) ||
+        p.last_name.toLowerCase().includes(query),
     );
   }, [patients, searchQuery]);
 
@@ -119,9 +103,9 @@ export default function ReprescribeScreen() {
       const res = await fetchPatientConsultations(patient.id);
       const consultations: Consultation[] = res.data.data ?? [];
 
-      const latestWithRx = consultations.find(
-        (c) => c.prescriptions && c.prescriptions.length > 0,
-      );
+      // Find most recent consultation with prescriptions for prefill
+      const latestWithRx = consultations
+      .find((c) => c.prescriptions && c.prescriptions.length > 0);
 
       const prefillMeds = latestWithRx
         ? latestWithRx.prescriptions.map((rx) => ({
@@ -137,14 +121,16 @@ export default function ReprescribeScreen() {
           }))
         : [];
 
+      // Collect all active diagnoses (ongoing/referred) across all consultations
       const activeDiagnoses: ActiveDiagnosis[] = [];
       const seenDiseaseIds = new Set<number>();
 
       consultations.forEach((c) => {
-        if (!c.diseases) return;
-        c.diseases.forEach((d) => {
+      if (!c.diseases) return;
+      c.diseases.forEach((d) => {
           const status = d.pivot?.status;
           const diseaseId = d.id;
+          // Only include ongoing/referred, deduplicate by disease_id (keep most recent)
           if (
             (status === "ongoing" || status === "referred") &&
             !seenDiseaseIds.has(diseaseId)
@@ -183,90 +169,73 @@ export default function ReprescribeScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        style={styles.scroller}
-        contentContainerStyle={styles.content}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={() => loadPatients(true)}
-            tintColor="#095c29"
-          />
-        }
-      >
-        {/* Search Bar */}
-        <View style={styles.searchBarWrapper}>
-          <TextInput
-            style={styles.searchBarInput}
-            placeholder="Search patients by name..."
-            placeholderTextColor="#94a3b8"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity
-              onPress={() => setSearchQuery("")}
-              style={styles.clearBtnClick}
-            >
-              <Text style={styles.clearBtnSymbol}>×</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* List Header */}
-        <View style={styles.listHeaderRow}>
-          <Text style={styles.promptHeadline}>
-            Returning Patients{" "}
-            <Text style={styles.patientCount}>
-              ({filteredPatients.length})
-            </Text>
-          </Text>
-        </View>
-
-        {/* Loading State */}
-        {isLoading ? (
-          <View style={{ alignItems: "center", marginTop: 48 }}>
-            <ActivityIndicator size="large" color="#095c29" />
-            <Text style={[styles.emptyText, { marginTop: 12 }]}>
-              Loading patients...
-            </Text>
-          </View>
-        ) : filteredPatients.length === 0 ? (
-          <Text style={styles.emptyText}>
-            {searchQuery
-              ? "No patients match your search."
-              : "No returning patients found."}
-          </Text>
-        ) : (
-          filteredPatients.map((patient) => (
-            <TouchableOpacity
-              key={patient.id}
-              style={styles.patientCard}
-              onPress={() => handleSelectPatient(patient)}
-              activeOpacity={0.75}
-              disabled={loadingPatientId === patient.id}
-            >
-              <View style={styles.cardInfoGroup}>
-                <Text style={styles.cardNameText}>
-                  {patient.last_name}, {patient.first_name}
-                </Text>
-                <Text style={styles.cardSubDetails}>
-                  {patient.gender
-                    ? patient.gender.charAt(0).toUpperCase() + patient.gender.slice(1)
-                    : "—"}{" "}
-                  • DOB: {patient.birthdate ?? "—"}
-                </Text>
-              </View>
-
-              {loadingPatientId === patient.id ? (
-                <ActivityIndicator size="small" color="#095c29" />
-              ) : (
-                <Text style={styles.chevron}>›</Text>
-              )}
-            </TouchableOpacity>
-          ))
+      {/* SEARCH */}
+      <View style={styles.searchWrapper}>
+        <Text style={styles.searchIcon}>🔍</Text>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search patient by name..."
+          placeholderTextColor="#94a3b8"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          autoCapitalize="none"
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery("")} style={styles.clearBtn}>
+            <Text style={styles.clearBtnText}>×</Text>
+          </TouchableOpacity>
         )}
-      </ScrollView>
+      </View>
+
+      {loading ? (
+        <ActivityIndicator size="large" color="#095c29" style={{ marginTop: 40 }} />
+      ) : (
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          {filteredPatients.length === 0 && patients.length === 0 ? (
+            <Text style={styles.emptyText}>No patients found in this clinic.</Text>
+          ) : filteredPatients.length === 0 ? (
+            <Text style={styles.emptyText}>No patients match "{searchQuery}".</Text>
+          ) : (
+            filteredPatients.map((patient) => (
+              <TouchableOpacity
+                key={patient.id}
+                style={styles.card}
+                onPress={() => handleSelectPatient(patient)}
+                activeOpacity={0.75}
+                disabled={loadingPatientId === patient.id}
+              >
+                {/* Avatar */}
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>
+                    {patient.first_name[0]?.toUpperCase()}
+                    {patient.last_name[0]?.toUpperCase()}
+                  </Text>
+                </View>
+
+                {/* Info */}
+                <View style={styles.cardInfo}>
+                  <Text style={styles.cardName}>
+                    {patient.last_name}, {patient.first_name}
+                  </Text>
+                  <Text style={styles.cardSub}>
+                    {patient.gender
+                      ? patient.gender.charAt(0).toUpperCase() + patient.gender.slice(1)
+                      : "—"}{" "}
+                    • {patient.birthdate ?? "—"}
+                  </Text>
+                </View>
+
+                {/* Loading indicator or arrow */}
+                {loadingPatientId === patient.id ? (
+                  <ActivityIndicator size="small" color="#095c29" />
+                ) : (
+                  <Text style={styles.chevron}>›</Text>
+                )}
+              </TouchableOpacity>
+            ))
+          )}
+        </ScrollView>
+      )}
     </View>
   );
 }

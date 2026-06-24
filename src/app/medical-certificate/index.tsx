@@ -1,6 +1,5 @@
 import { useAuth } from "@/components/context/auth-context";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import * as MailComposer from "expo-mail-composer";
 import * as Print from "expo-print";
 import { useMemo, useState } from "react";
 import {
@@ -52,22 +51,6 @@ const formatDisplayDate = (date: Date) =>
     year: "numeric",
   });
 
-const formatIssuedDateTime = (date: Date) => {
-  const d = date.toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-  const t = date.toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-    timeZoneName: "short",
-  });
-  return `${d}\n${t}`;
-};
-
 // ── PDF HTML Generator ────────────────────────────────────────────────────────
 
 const generateMedicalCertificateHTML = (
@@ -78,7 +61,6 @@ const generateMedicalCertificateHTML = (
   clinicAddress: string,
   clinicContact: string,
   prcNumber: string,
-  issuedAt: Date,
 ): string => `
 <!DOCTYPE html>
 <html>
@@ -94,117 +76,81 @@ const generateMedicalCertificateHTML = (
       max-width: 700px;
       margin: 0 auto;
     }
-    .header {
+    .doctor-name {
+      font-size: 18pt;
+      font-weight: bold;
       text-align: center;
-      border-bottom: 2px solid #000;
-      padding-bottom: 16px;
-      margin-bottom: 16px;
+      margin-bottom: 2px;
     }
-    .clinic-name { font-size: 16pt; font-weight: bold; letter-spacing: 0.5px; }
-    .clinic-sub { font-size: 10pt; margin-top: 2px; color: #333; }
-    .doctor-name { font-size: 14pt; font-weight: bold; margin-top: 10px; }
-    .doctor-specialty { font-size: 10pt; font-style: italic; color: #444; }
-    .cert-meta {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 20px;
+    .specialty {
+      font-size: 11pt;
+      text-align: center;
+      color: #444;
+      margin-bottom: 14px;
+    }
+    .clinic-name {
+      font-size: 12pt;
+      font-weight: bold;
+      text-align: center;
+    }
+    .clinic-detail {
       font-size: 10pt;
+      text-align: center;
       color: #444;
     }
-    .cert-id { font-size: 9pt; color: #666; }
-    .cert-date { text-align: right; white-space: pre-line; font-size: 10pt; }
+    .double-line {
+      border: none;
+      border-top: 3px double #000;
+      margin: 14px 0;
+    }
+    .date-row {
+      text-align: right;
+      font-size: 11pt;
+      margin-bottom: 20px;
+    }
     .title {
       text-align: center;
       font-size: 16pt;
       font-weight: bold;
       letter-spacing: 2px;
-      text-decoration: underline;
-      margin: 20px 0 24px 0;
+      margin: 20px 0 20px 0;
     }
-    .patient-block { margin-bottom: 20px; }
-    .patient-line { font-size: 11pt; margin-bottom: 4px; }
-    .patient-line span { font-weight: bold; }
-    .section { margin-bottom: 18px; }
-    .section-label { font-size: 12pt; font-weight: bold; margin-bottom: 6px; }
-    .section-content { font-size: 11pt; line-height: 1.6; padding-left: 8px; }
-    .disclaimer {
-      text-align: center;
-      font-size: 10pt;
-      color: #444;
-      margin: 28px 0 32px 0;
-      font-style: italic;
+    .body-text {
+      font-size: 12pt;
+      line-height: 1.8;
+      margin-bottom: 24px;
+      text-align: justify;
     }
-    .signature-block { margin-top: 40px; text-align: center; }
-    .signature-line {
-      width: 220px;
-      border-top: 1.5px solid #000;
-      margin: 0 auto 6px auto;
-    }
-    .signature-name { font-size: 12pt; font-weight: bold; }
-    .signature-prc { font-size: 10pt; color: #444; }
-    .footer-note {
-      margin-top: 36px;
-      border-top: 1px solid #ccc;
-      padding-top: 10px;
-      font-size: 8.5pt;
-      color: #555;
-      line-height: 1.5;
-    }
-    .end-tag {
-      text-align: center;
-      font-size: 9pt;
-      color: #666;
-      margin-top: 16px;
-      font-style: italic;
+    .signature {
+      text-align: right;
+      margin-top: 40px;
+      font-size: 12pt;
+      line-height: 1.6;
     }
   </style>
 </head>
 <body>
-  <div class="header">
-    <div class="clinic-name">${testUser?.clinic?.name}</div>
-    <div class="clinic-sub">${testUser?.clinic?.address}</div>
-    <div class="clinic-sub">Tel No.: ${testUser?.clinic?.contactNumber}</div>
-    <div class="doctor-name">${testUser?.firstName} ${testUser?.lastName}</div>
-    <div class="doctor-specialty">${testUser?.specialty}</div>
-  </div>
-  <div class="cert-meta">
-    <div class="cert-id">MEDICAL CERTIFICATE ID: ${cert.id}</div>
-    <div class="cert-date">${formatIssuedDateTime(issuedAt)}</div>
-  </div>
+  <div class="doctor-name">${doctorName}</div>
+  <div class="specialty">${specialty}</div>
+  <div class="clinic-name">${clinicName}</div>
+  <div class="clinic-detail">${clinicAddress}</div>
+  <div class="clinic-detail">Tel No.: ${clinicContact}</div>
+  <hr class="double-line" />
+  <div class="date-row">Date: ${formatDisplayDate(new Date(cert.dateIssued))}</div>
   <div class="title">MEDICAL CERTIFICATE</div>
-  <div class="patient-block">
-    <div class="patient-line"><span>Patient:</span> ${cert.patient.lastName}, ${cert.patient.firstName}</div>
-    <div class="patient-line"><span>Age:</span> ${calculateAge(cert.patient.birthdate)} years old</div>
-    <div class="patient-line"><span>Gender:</span> ${cert.patient.gender}</div>
+  <div class="body-text">
+    To whom it may concern,<br/><br/>
+    This is to certify that <strong>${cert.patient.lastName}, ${cert.patient.firstName}</strong> has consulted me on <strong>${formatDisplayDate(new Date(cert.dateIssued))}</strong> with the following diagnosis:<br/><br/>
+    <strong>Diagnosis:</strong> ${cert.diagnosis}<br/><br/>
+    <strong>Recommendation(s):</strong> ${cert.recommendation}<br/><br/>
+    This certificate is issued upon the request of the patient.<br/>
+    Thank you.
   </div>
-  <div class="section">
-    <div class="section-label">Complaints:</div>
-    <div class="section-content">${cert.complaints}</div>
+  <div class="signature">
+    ${doctorName}<br/>
+    ${specialty}<br/>
+    Lic No.: ${prcNumber}
   </div>
-  <div class="section">
-    <div class="section-label">Diagnosis:</div>
-    <div class="section-content">${cert.diagnosis}</div>
-  </div>
-  <div class="section">
-    <div class="section-label">Recommendation:</div>
-    <div class="section-content">${cert.recommendation}</div>
-  </div>
-  <div class="disclaimer">
-    This certificate is issued upon the request of the above patient for whatever purpose it may serve,
-    except for medico-legal reasons.
-  </div>
-  <div class="signature-block">
-    <div class="signature-line"></div>
-    <div class="signature-name">${testUser.firstName} ${testUser.lastName}</div>
-    <div class="signature-prc">PRC No.: ${testUser.prcNumber}</div>
-  </div>
-  <div class="footer-note">
-    <strong>Note to User:</strong> The information contained in this medical certificate is confidential
-    and intended solely for the named patient. Unauthorized reproduction or alteration of this document
-    is strictly prohibited and may be subject to legal action.
-  </div>
-  <div class="end-tag">(End of Medical Certificate)</div>
 </body>
 </html>
 `;
@@ -245,6 +191,10 @@ export default function MedicalCertificateScreen() {
   const [certificates, setCertificates] = useState<MedicalCertificate[]>(
     testMedicalCertificates,
   );
+
+  // Preview modal state
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewCert, setPreviewCert] = useState<MedicalCertificate | null>(null);
 
   // ── Patient search filter (useMemo) ─────────────────────────────────────────
   const filteredPatients = useMemo(() => {
@@ -291,68 +241,38 @@ export default function MedicalCertificateScreen() {
   };
 
   // ── Export PDF ──────────────────────────────────────────────────────────────
-  const handleExportPDF = async (cert: MedicalCertificate) => {
+  const handleExportPDF = (cert: MedicalCertificate) => {
+    setPreviewCert(cert);
+    setShowPreview(true);
+  };
+
+  const handlePrint = async () => {
+    if (!previewCert) return;
+
     const doctorName = user
-      ? `${user.firstName} ${user.lastName}, MD`
+      ? `${user.firstName} ${user.lastName}`
       : "Physician";
     const specialty = user?.specialty ?? "General Practice";
-    const clinicName = user?.clinic?.name ?? "CraveCare Clinic";
+    const clinicName = user?.clinic?.name ?? "Clinic";
     const clinicAddress = user?.clinic?.address ?? "";
     const clinicContact = user?.clinic?.contactNumber ?? "";
     const prcNumber = user?.prcNumber ?? "N/A";
-    const issuedAt = new Date();
 
     const html = generateMedicalCertificateHTML(
-      cert,
+      previewCert,
       doctorName,
       specialty,
       clinicName,
       clinicAddress,
       clinicContact,
       prcNumber,
-      issuedAt,
     );
 
-    Alert.alert(
-      "Export Medical Certificate",
-      "Choose how to export this certificate.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "📤 Share / Print",
-          onPress: async () => {
-            try {
-              await Print.printAsync({ html });
-            } catch (err: any) {
-              Alert.alert("Print Failed", err?.message ?? JSON.stringify(err));
-            }
-          },
-        },
-        {
-          text: "📧 Send via Email",
-          onPress: async () => {
-            try {
-              const { uri } = await Print.printToFileAsync({ html });
-              const isAvailable = await MailComposer.isAvailableAsync();
-              if (!isAvailable) {
-                Alert.alert(
-                  "Email Unavailable",
-                  "No email client is configured on this device.",
-                );
-                return;
-              }
-              await MailComposer.composeAsync({
-                subject: `Medical Certificate — ${cert.patient.firstName} ${cert.patient.lastName}`,
-                body: `Please find attached the medical certificate for ${cert.patient.firstName} ${cert.patient.lastName}.`,
-                attachments: [uri],
-              });
-            } catch (err) {
-              Alert.alert("Email Failed", "Could not open email composer.");
-            }
-          },
-        },
-      ],
-    );
+    try {
+      await Print.printAsync({ html });
+    } catch (err: any) {
+      Alert.alert("Print Failed", err?.message ?? JSON.stringify(err));
+    }
   };
 
   // ── Issue certificate ───────────────────────────────────────────────────────
@@ -421,71 +341,68 @@ export default function MedicalCertificateScreen() {
     }
   };
 
-  // ── VIEW 1: Certificate History List ───────────────────────────────────────
-  if (!isCreating) {
-    return (
-      <View style={styles.container}>
-        <ScrollView
-          style={styles.scroller}
-          contentContainerStyle={styles.content}
-        >
-          <View style={styles.listHeaderRow}>
-            <Text style={styles.promptHeadline}>Medical Certificates</Text>
-            <TouchableOpacity style={styles.addBtn} onPress={openCreateForm}>
-              <Text style={styles.addBtnText}>+ Issue New</Text>
-            </TouchableOpacity>
-          </View>
-
-          {certificates.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyIcon}>📄</Text>
-              <Text style={styles.emptyText}>No certificates issued yet.</Text>
-              <Text style={styles.emptySubtext}>
-                Tap "+ Issue New" to create a medical certificate.
-              </Text>
-            </View>
-          ) : (
-            certificates.map((cert) => (
-              <View key={cert.id} style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <Text style={styles.cardName}>
-                    {cert.patient.lastName}, {cert.patient.firstName}
-                  </Text>
-                  <Text style={styles.cardDate}>
-                    {formatDisplayDate(new Date(cert.dateIssued))}
-                  </Text>
-                </View>
-                <Text style={styles.cardDetail} numberOfLines={1}>
-                  🩺 {cert.diagnosis}
-                </Text>
-                <Text style={styles.cardDetail} numberOfLines={1}>
-                  📋 {cert.recommendation}
-                </Text>
-                <Text style={styles.cardId}>ID: {cert.id}</Text>
-                <TouchableOpacity
-                  style={styles.exportBtn}
-                  onPress={() => handleExportPDF(cert)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.exportBtnText}>📤 Export PDF</Text>
-                </TouchableOpacity>
-              </View>
-            ))
-          )}
-        </ScrollView>
-      </View>
-    );
-  }
-
-  // ── VIEW 2: Issue Form ──────────────────────────────────────────────────────
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <View style={styles.container}>
-      <ScrollView
-        style={styles.scroller}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        <Text style={styles.promptHeadline}>Issue a Medical Certificate</Text>
+    <>
+      {!isCreating ? (
+        <View style={styles.container}>
+          <ScrollView
+            style={styles.scroller}
+            contentContainerStyle={styles.content}
+          >
+            <View style={styles.listHeaderRow}>
+              <Text style={styles.promptHeadline}>Medical Certificates</Text>
+              <TouchableOpacity style={styles.addBtn} onPress={openCreateForm}>
+                <Text style={styles.addBtnText}>+ Issue New</Text>
+              </TouchableOpacity>
+            </View>
+
+            {certificates.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyIcon}>📄</Text>
+                <Text style={styles.emptyText}>No certificates issued yet.</Text>
+                <Text style={styles.emptySubtext}>
+                  Tap "+ Issue New" to create a medical certificate.
+                </Text>
+              </View>
+            ) : (
+              certificates.map((cert) => (
+                <View key={cert.id} style={styles.card}>
+                  <View style={styles.cardHeader}>
+                    <Text style={styles.cardName}>
+                      {cert.patient.lastName}, {cert.patient.firstName}
+                    </Text>
+                    <Text style={styles.cardDate}>
+                      {formatDisplayDate(new Date(cert.dateIssued))}
+                    </Text>
+                  </View>
+                  <Text style={styles.cardDetail} numberOfLines={1}>
+                    🩺 {cert.diagnosis}
+                  </Text>
+                  <Text style={styles.cardDetail} numberOfLines={1}>
+                    📋 {cert.recommendation}
+                  </Text>
+                  <Text style={styles.cardId}>ID: {cert.id}</Text>
+                  <TouchableOpacity
+                    style={styles.exportBtn}
+                    onPress={() => handleExportPDF(cert)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.exportBtnText}>📤 Export PDF</Text>
+                  </TouchableOpacity>
+                </View>
+              ))
+            )}
+          </ScrollView>
+        </View>
+      ) : (
+        <View style={styles.container}>
+          <ScrollView
+            style={styles.scroller}
+            contentContainerStyle={styles.content}
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={styles.promptHeadline}>Issue a Medical Certificate</Text>
 
         {/* SELECT PATIENT BUTTON */}
         <TouchableOpacity
@@ -772,7 +689,110 @@ export default function MedicalCertificateScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+        </View>
+      )}
+      {showPreview && previewCert && (
+        <Modal
+          visible={showPreview}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setShowPreview(false)}
+        >
+          <View style={styles.previewOverlay}>
+            <View style={styles.previewSheet}>
+              <View style={styles.previewHeader}>
+                <Text style={styles.previewTitle}>Preview</Text>
+                <TouchableOpacity onPress={() => setShowPreview(false)}>
+                  <Text style={styles.previewCloseText}>Close</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView
+                style={styles.previewContent}
+                showsVerticalScrollIndicator={false}
+              >
+                <Text style={styles.previewDoctorName}>
+                  {user?.firstName} {user?.lastName}
+                </Text>
+                <Text style={styles.previewSpecialty}>
+                  {user?.specialty ?? "General Practice"}
+                </Text>
+                <Text style={styles.previewClinicName}>
+                  {user?.clinic?.name}
+                </Text>
+                <Text style={styles.previewClinicDetail}>
+                  {user?.clinic?.address}
+                </Text>
+                <Text style={styles.previewClinicDetail}>
+                  Tel No.: {user?.clinic?.contactNumber}
+                </Text>
+                <View style={styles.previewDoubleLine} />
+                <Text style={styles.previewDate}>
+                  Date: {formatDisplayDate(new Date(previewCert.dateIssued))}
+                </Text>
+                <Text style={styles.previewTitleText}>
+                  MEDICAL CERTIFICATE
+                </Text>
+                <View style={styles.previewBody}>
+                  <Text style={styles.previewBodyText}>
+                    To whom it may concern,{"\n\n"}
+                    This is to certify that{" "}
+                    <Text style={styles.previewBold}>
+                      {previewCert.patient.lastName},{" "}
+                      {previewCert.patient.firstName}
+                    </Text>{" "}
+                    has consulted me on{" "}
+                    <Text style={styles.previewBold}>
+                      {formatDisplayDate(
+                        new Date(previewCert.dateIssued),
+                      )}
+                    </Text>{" "}
+                    with the following diagnosis:
+                    {"\n\n"}
+                    <Text style={styles.previewBold}>Diagnosis:</Text>{" "}
+                    {previewCert.diagnosis}
+                    {"\n\n"}
+                    <Text style={styles.previewBold}>
+                      Recommendation(s):
+                    </Text>{" "}
+                    {previewCert.recommendation}
+                    {"\n\n"}
+                    This certificate is issued upon the request of the
+                    patient.
+                    {"\n"}
+                    Thank you.
+                  </Text>
+                </View>
+                <View style={styles.previewSignature}>
+                  <Text style={styles.previewSignatureText}>
+                    {user?.firstName} {user?.lastName}
+                    {"\n"}
+                    {user?.specialty ?? "General Practice"}
+                    {"\n"}
+                    Lic No.: {user?.prcNumber ?? "N/A"}
+                  </Text>
+                </View>
+              </ScrollView>
+              <View style={styles.previewFooter}>
+                <TouchableOpacity
+                  style={styles.previewBackBtn}
+                  onPress={() => setShowPreview(false)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.previewBackBtnText}>Back</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.previewPrintBtn}
+                  onPress={handlePrint}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.previewPrintBtnText}>Print</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
+    </>
   );
 }
 
@@ -971,6 +991,147 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
     letterSpacing: 0.5,
+  },
+
+  // Preview modal
+  previewOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 16,
+  },
+  previewSheet: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    width: "100%",
+    maxWidth: 500,
+    maxHeight: "90%",
+    overflow: "hidden",
+    elevation: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+  },
+  previewHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+    backgroundColor: "#f8fafc",
+  },
+  previewTitle: { fontSize: 17, fontWeight: "700", color: "#1e293b" },
+  previewCloseText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#095c29",
+  },
+  previewContent: {
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 16,
+  },
+  previewDoctorName: {
+    fontSize: 18,
+    fontWeight: "700",
+    textAlign: "center",
+    color: "#0f172a",
+    marginBottom: 2,
+  },
+  previewSpecialty: {
+    fontSize: 12,
+    fontStyle: "italic",
+    textAlign: "center",
+    color: "#475569",
+    marginBottom: 16,
+  },
+  previewClinicName: {
+    fontSize: 13,
+    fontWeight: "700",
+    textAlign: "center",
+    color: "#334155",
+  },
+  previewClinicDetail: {
+    fontSize: 11,
+    textAlign: "center",
+    color: "#64748b",
+  },
+  previewDoubleLine: {
+    borderTopWidth: 3,
+    borderTopColor: "#000",
+    marginVertical: 14,
+  },
+  previewDate: {
+    fontSize: 11,
+    textAlign: "right",
+    color: "#475569",
+    marginBottom: 16,
+  },
+  previewTitleText: {
+    fontSize: 16,
+    fontWeight: "700",
+    textAlign: "center",
+    letterSpacing: 2,
+    color: "#0f172a",
+    marginBottom: 16,
+  },
+  previewBody: { marginBottom: 24 },
+  previewBodyText: {
+    fontSize: 12,
+    lineHeight: 22,
+    color: "#1e293b",
+    textAlign: "justify",
+  },
+  previewBold: { fontWeight: "700" },
+  previewSignature: {
+    alignItems: "flex-end",
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  previewSignatureText: {
+    fontSize: 12,
+    lineHeight: 20,
+    color: "#0f172a",
+    textAlign: "right",
+  },
+  previewFooter: {
+    flexDirection: "row",
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    gap: 12,
+    backgroundColor: "#f8fafc",
+  },
+  previewBackBtn: {
+    flex: 1,
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  previewBackBtnText: {
+    color: "#475569",
+    fontWeight: "600",
+    fontSize: 15,
+  },
+  previewPrintBtn: {
+    flex: 1,
+    backgroundColor: "#095c29",
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  previewPrintBtnText: {
+    color: "#ffffff",
+    fontWeight: "700",
+    fontSize: 15,
   },
 
   modalOverlay: {

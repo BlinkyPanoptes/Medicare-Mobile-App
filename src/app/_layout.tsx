@@ -23,16 +23,6 @@ function RootStack() {
 
   if (isLoading) return null;
 
-const doctorTitle = user?.role === "doctor"
-  ? `Hello, Dr. ${user.first_name}! 👋`
-  : null;
-
-const assistantTitle = user?.role === "assistant"
-  ? `Hello, ${user.first_name}! 👋`
-  : null;
-
-const headerTitle = doctorTitle ?? assistantTitle ?? "Dashboard";
-
   return (
     <Stack 
       screenOptions={{
@@ -42,20 +32,18 @@ const headerTitle = doctorTitle ?? assistantTitle ?? "Dashboard";
     >
       <Stack.Screen name="login" options={{ headerShown: false }} />
       <Stack.Screen name="clinic-selection" options={{ headerShown: false }} />
-      <Stack.Screen name="dashboard" options={{ title: headerTitle }} />
+      <Stack.Screen name="dashboard" options={{ title: "Main Clinic" }} />
       <Stack.Screen name="admin-dashboard" options={{ title: "Admin Control Panel" }} />
       <Stack.Screen name="patient-records" options={{ title: "Patient Records" }} />
       <Stack.Screen name="patient-records/[id]" options={{ title: "Patient Profile" }} />
       <Stack.Screen name="patient-records/[id]/prescriptions" options={{ title: "Prescription History" }} />
       <Stack.Screen name="consultations" options={{ title: "Consultations" }} />
       <Stack.Screen name="consultations/newPrescription" options={{ title: "New Prescription" }} />
-      <Stack.Screen name="consultations/rePrescribe" options={{ title: "Represcribe" }} />
       <Stack.Screen name="transactions" options={{ title: "Transactions" }} />
       <Stack.Screen name="brand-directory" options={{ title: "Brand Directory" }} />
       <Stack.Screen name="generics" options={{ title: "Generics" }} />
       <Stack.Screen name="diseases" options={{ title: "Diseases" }} />
       <Stack.Screen name="medical-certificate" options={{ title: "Medical Certificate" }} />
-      <Stack.Screen name="current-queue" options={{ title: "Current Queue" }} />
     </Stack>
   );
 }

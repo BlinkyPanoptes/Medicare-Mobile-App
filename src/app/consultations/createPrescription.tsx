@@ -1,6 +1,5 @@
 import apiClient from "@/api/client";
 import { createDisease, fetchDiseases } from "@/api/disease";
-import { removeFromQueue } from "@/api/queue";
 import { useAuth } from "@/components/context/auth-context";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
@@ -79,13 +78,12 @@ export default function CreatePrescriptionScreen() {
   const navigation = useNavigation();
   const { activeClinic, user } = useAuth();
 
-  const { patientId, patientName, patientGender, patientBirthdate, queueId, prefillMeds, prefillActiveDiagnoses } =
+  const { patientId, patientName, patientGender, patientBirthdate, prefillMeds, prefillActiveDiagnoses } =
     useLocalSearchParams<{
       patientId: string;
       patientName: string;
       patientGender: string;
       patientBirthdate: string;
-      queueId?: string;
       prefillMeds?: string;
       prefillActiveDiagnoses?: string;
     }>();
@@ -434,17 +432,6 @@ export default function CreatePrescriptionScreen() {
       };
 
       await apiClient.post("/consultations", payload);
-
-      // Remove patient from queue now that prescription is saved
-      if (queueId) {
-        try {
-          await removeFromQueue(Number(queueId));
-        } catch {
-          console.log("queueId param:", queueId);
-          // Non-blocking — queue removal failure shouldn't stop the success flow
-        }
-      }
-
       Alert.alert("Success", "Consultation and prescription saved.", [
         { text: "OK", onPress: () => router.back() },
       ]);

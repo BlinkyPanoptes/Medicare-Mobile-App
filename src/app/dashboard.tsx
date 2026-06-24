@@ -1,21 +1,19 @@
-import { useCallback, useState } from "react";
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  useWindowDimensions,
-  View,
+import { useState } from "react";
+import { 
+  Modal, 
+  Pressable, 
+  ScrollView, 
+  Text, 
+  TouchableOpacity, 
+  useWindowDimensions, 
+  View 
 } from "react-native";
 import { router } from "expo-router";
-import { useFocusEffect } from "expo-router";
 import { useAuth } from "@/components/context/auth-context";
 import { ButtonCard, Card } from "@/components/ui";
 import { dashboardStyles as styles } from "@/styles/dashboardStyles";
 import { Clinic } from "@/types/clinic";
 import { UserRole } from "@/types/user";
-import { fetchQueue } from "@/api/queue";
 
 type ButtonRoute =
   | "/patient-records"
@@ -24,8 +22,7 @@ type ButtonRoute =
   | "/brand-directory"
   | "/generics"
   | "/diseases"
-  | "/medical-certificate"
-  | "/current-queue";
+  | "/medical-certificate";
 
 type ButtonItem = {
   label: string;
@@ -39,23 +36,6 @@ export default function Dashboard() {
   const { width } = useWindowDimensions();
   const { user, logout, clinics, activeClinic, selectClinic } = useAuth();
   const [clinicModalVisible, setClinicModalVisible] = useState(false);
-  const [queueCount, setQueueCount] = useState(0);
-
-  // Refresh queue count every time the dashboard tab comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      if (!user || !activeClinic) return;
-      const loadQueueCount = async () => {
-        try {
-          const response = await fetchQueue();
-          setQueueCount(response.data.data?.length || 0);
-        } catch (error) {
-          console.error("Error loading queue count:", error);
-        }
-      };
-      loadQueueCount();
-    }, [user, activeClinic])
-  );
 
   const handleLogout = async () => {
     await logout();
@@ -67,7 +47,13 @@ export default function Dashboard() {
     setClinicModalVisible(false);
   };
 
-  const getColumns = () => (width >= 1024 ? 4 : width >= 768 ? 3 : width >= 600 ? 3 : 2);
+  const getColumns = () => {
+    if (width >= 1024) return 4;
+    if (width >= 768) return 3;
+    if (width >= 600) return 3;
+    return 2;
+  };
+
   const columns = getColumns();
   const cardWidth = 100 / columns - 2;
 
@@ -81,7 +67,7 @@ export default function Dashboard() {
   const drugButtons: ButtonItem[] = [
     { label: "Brand Directory", route: "/brand-directory", icon: "💊", description: "View and manage branded medications", allowedRoles: ["doctor", "assistant"] },
     { label: "Generics", route: "/generics", icon: "🧪", description: "View and manage generic medications", allowedRoles: ["doctor", "assistant"] },
-    { label: "Diseases", route: "/diseases", icon: "🦠", description: "View and manage disease information", allowedRoles: ["doctor"] },
+    { label: "Diseases", route: "/diseases", icon: "🦠", description: "View and manage disease information", allowedRoles: ["doctor", "assistant"] },
   ];
 
   const filterByRole = (btn: ButtonItem) => {
@@ -97,146 +83,81 @@ export default function Dashboard() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Welcome Card */}
-        <Card style={styles.welcomeCard}>
-          <Text style={styles.welcomeTitle}>Welcome to CraveCare EMR</Text>
-          <Text style={styles.welcomeText}>
-            Manage patients, consultations, and records in one workspace.
-          </Text>
-        </Card>
-
-        {/* Queue + Clinic Switcher Row */}
-        <View style={styles.queueRow}>
-          <TouchableOpacity
-            style={[styles.queueCard, { flex: 1 }]}
-            onPress={() => router.push("/current-queue")}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.queueLabel}>Current Queue</Text>
-            <View style={styles.queueCountContainer}>
-              <Text style={styles.queueCount}>{queueCount}</Text>
-              <Text style={styles.queuePatientsLabel}> Patients</Text>
-            </View>
-          </TouchableOpacity>
+        <View style={styles.header}>
+          <View style={{ flex: 1, marginRight: 12 }}>
+            <Text style={styles.greeting}>
+              Good Day, {user ? (user.role === "doctor" ? `Dr. ${user.first_name}` : user.first_name) : "Staff"}! 👋
+            </Text>
+            <Text style={styles.title}>{activeClinic?.clinic_name ?? "Select a Clinic"}</Text>
+          </View>
 
           {clinics.length > 1 && (
-            <TouchableOpacity
-              style={[styles.clinicSwitcherBtn, { flex: 1 }]}
-              onPress={() => setClinicModalVisible(true)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.clinicSwitcherIcon}>🏥</Text>
-              <Text style={styles.clinicSwitcherLabel}>Switch Clinic</Text>
+            <TouchableOpacity style={styles.clinicSwitcherBtn} onPress={() => setClinicModalVisible(true)} activeOpacity={0.8}>
+              <Text style={{ fontSize: 22 }}>🏥</Text>
+              <View style={{ flexShrink: 1 }}>
+                <Text style={styles.clinicSwitcherLabel} numberOfLines={1}>{activeClinic?.clinic_name ?? "Select"}</Text>
+                <Text style={styles.clinicSwitcherSub}>Tap to switch</Text>
+              </View>
             </TouchableOpacity>
           )}
         </View>
 
-        {/* Clinic Management Section */}
+        <Card style={styles.welcomeCard}>
+          <Text style={styles.welcomeTitle}>Welcome to CraveCare EMR</Text>
+          <Text style={styles.welcomeText}>Manage patients, consultations, transactions, and drug information in one organized workspace.</Text>
+        </Card>
+
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Clinic Management</Text>
           <Text style={styles.sectionSubtitle}>Core operations</Text>
         </View>
 
-        <View style={styles.buttonGrid}>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", marginBottom: 18 }}>
           {clinicButtons.filter(filterByRole).map((btn) => (
-            <ButtonCard
-              key={btn.route}
-              label={btn.label}
-              route={btn.route}
-              icon={btn.icon}
-              description={btn.description}
-              cardWidth={cardWidth}
-            />
+            <ButtonCard key={btn.route} label={btn.label} route={btn.route} icon={btn.icon} description={btn.description} cardWidth={cardWidth} />
           ))}
         </View>
 
-        {/* Drug Information Section */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Drug Information</Text>
           <Text style={styles.sectionSubtitle}>Medication references</Text>
         </View>
 
-        <View style={styles.buttonGrid}>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", marginBottom: 18 }}>
           {drugButtons.filter(filterByRole).map((btn) => (
-            <ButtonCard
-              key={btn.route}
-              label={btn.label}
-              route={btn.route}
-              icon={btn.icon}
-              description={btn.description}
-              cardWidth={cardWidth}
-            />
+            <ButtonCard key={btn.route} label={btn.label} route={btn.route} icon={btn.icon} description={btn.description} cardWidth={cardWidth} />
           ))}
         </View>
 
-        <TouchableOpacity
-          activeOpacity={0.85}
-          style={styles.logoutButton}
-          onPress={handleLogout}
-        >
+        <TouchableOpacity activeOpacity={0.85} style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutButtonText}>Log Out Session</Text>
         </TouchableOpacity>
       </ScrollView>
 
-      {/* Clinic Switcher Modal */}
-      <Modal
-        visible={clinicModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setClinicModalVisible(false)}
-      >
-        <Pressable
-          style={styles.modalBackdrop}
-          onPress={() => setClinicModalVisible(false)}
-        >
+      <Modal visible={clinicModalVisible} transparent animationType="slide" onRequestClose={() => setClinicModalVisible(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setClinicModalVisible(false)}>
           <Pressable style={styles.modalSheet} onPress={() => {}}>
             <View style={styles.sheetHandle} />
             <Text style={styles.modalTitle}>Switch Clinic</Text>
-            <Text style={styles.modalSubtitle}>
-              Select your active branch for this session.
-            </Text>
+            <Text style={{ fontSize: 14, color: "#64748b", marginBottom: 20 }}>Select your active branch for this session.</Text>
 
             <View style={{ gap: 10 }}>
               {clinics.map((clinic) => {
                 const isSelected = clinic.id === activeClinic?.id;
                 return (
-                  <TouchableOpacity
-                    key={clinic.id}
-                    style={[
-                      styles.modalCard,
-                      isSelected && styles.modalCardSelected,
-                    ]}
+                  <TouchableOpacity 
+                    key={clinic.id} 
+                    style={[styles.modalCard, isSelected && styles.modalCardSelected]} 
                     onPress={() => handleSelectClinic(clinic)}
                   >
-                    <View
-                      style={[
-                        styles.modalCardAccent,
-                        isSelected && styles.modalCardAccentSelected,
-                      ]}
-                    />
+                    <View style={[styles.modalCardAccent, isSelected && styles.modalCardAccentSelected]} />
                     <View style={styles.modalCardBody}>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.modalCardName}>
-                          {clinic.clinic_name}
-                        </Text>
-                        {clinic.address && (
-                          <Text style={styles.modalCardAddress}>
-                            {clinic.address}
-                          </Text>
-                        )}
+                        <Text style={styles.modalCardName}>{clinic.clinic_name}</Text>
+                        {clinic.address && <Text style={styles.modalCardAddress}>{clinic.address}</Text>}
                       </View>
-                      <View
-                        style={
-                          isSelected ? styles.badgeActive : styles.badgeAvailable
-                        }
-                      >
-                        <Text
-                          style={
-                            isSelected
-                              ? styles.badgeActiveText
-                              : styles.badgeAvailableText
-                          }
-                        >
+                      <View style={isSelected ? styles.badgeActive : styles.badgeAvailable}>
+                        <Text style={isSelected ? styles.badgeActiveText : styles.badgeAvailableText}>
                           {isSelected ? "Active" : "Switch"}
                         </Text>
                       </View>
@@ -246,10 +167,7 @@ export default function Dashboard() {
               })}
             </View>
 
-            <TouchableOpacity
-              style={styles.modalDismissBtn}
-              onPress={() => setClinicModalVisible(false)}
-            >
+            <TouchableOpacity style={styles.modalDismissBtn} onPress={() => setClinicModalVisible(false)}>
               <Text style={styles.modalDismissBtnText}>Cancel</Text>
             </TouchableOpacity>
           </Pressable>
