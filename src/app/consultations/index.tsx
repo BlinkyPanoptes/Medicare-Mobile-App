@@ -1,6 +1,6 @@
+import { prescriptionStyles as styles } from "@/styles/prescriptionStyles";
 import { router } from "expo-router";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
-import { prescriptionStyles as styles } from "@/styles/prescriptionStyles";
 
 type PrescriptionButton = {
   label: string;
@@ -24,16 +24,10 @@ export default function CreatePrescriptionScreen() {
       onPress: () => router.push("/consultations/rePrescribe"),
     },
     {
-      label: "Templates",
-      icon: "📄",
-      description: "Use or manage prescription templates",
-      onPress: () => {},
-    },
-    {
-      label: "Formulary",
-      icon: "📖",
-      description: "View approved medications list",
-      onPress: () => {},
+      label: "Medical Certificate",
+      icon: "🏥",
+      description: "Issue a medical certificate",
+      onPress: () => router.push("/medical-certificate"),
     },
   ];
 

@@ -1,6 +1,7 @@
 import { fetchPatientConsultations } from "@/api/consultation";
-import { fetchPatients } from "@/api/patient";
+import { fetchPatientById, fetchPatients } from "@/api/patient";
 import { rePrescribeStyles as styles } from "@/styles/rePrescribeStyles";
+import { calculateAge } from "@/utils/age";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -20,6 +21,11 @@ type Patient = {
   last_name: string;
   gender: string;
   birthdate: string;
+  temperature?: string;
+  blood_pressure?: string;
+  height?: string;
+  weight?: string;
+  allergies?: string;
 };
 
 type Prescription = {
@@ -77,7 +83,6 @@ export default function ReprescribeScreen() {
       const res = await fetchPatients();
       const allPatients: Patient[] = res.data.data ?? res.data;
 
-      // Only show patients who have at least one consultation (old patients)
       const consultationChecks = await Promise.all(
         allPatients.map(async (p) => {
           try {
@@ -99,9 +104,7 @@ export default function ReprescribeScreen() {
     }
   };
 
-  useEffect(() => {
-    loadPatients();
-  }, []);
+  useEffect(() => { loadPatients(); }, []);
 
   const filteredPatients = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -116,6 +119,10 @@ export default function ReprescribeScreen() {
   const handleSelectPatient = async (patient: Patient) => {
     setLoadingPatientId(patient.id);
     try {
+      // Fetch full patient record to get vitals
+      const patientRes = await fetchPatientById(patient.id);
+      const fullPatient = patientRes.data.data ?? patientRes.data;
+
       const res = await fetchPatientConsultations(patient.id);
       const consultations: Consultation[] = res.data.data ?? [];
 
@@ -170,6 +177,11 @@ export default function ReprescribeScreen() {
           patientName: `${patient.last_name}, ${patient.first_name}`,
           patientGender: patient.gender,
           patientBirthdate: patient.birthdate,
+          patientTemperature: fullPatient.temperature ?? "",
+          patientBloodPressure: fullPatient.blood_pressure ?? "",
+          patientHeight: fullPatient.height ?? "",
+          patientWeight: fullPatient.weight ?? "",
+          patientAllergies: fullPatient.allergies ?? "",
           prefillMeds: JSON.stringify(prefillMeds),
           prefillActiveDiagnoses: JSON.stringify(activeDiagnoses),
         },
@@ -194,7 +206,6 @@ export default function ReprescribeScreen() {
           />
         }
       >
-        {/* Search Bar */}
         <View style={styles.searchBarWrapper}>
           <TextInput
             style={styles.searchBarInput}
@@ -204,38 +215,27 @@ export default function ReprescribeScreen() {
             onChangeText={setSearchQuery}
           />
           {searchQuery.length > 0 && (
-            <TouchableOpacity
-              onPress={() => setSearchQuery("")}
-              style={styles.clearBtnClick}
-            >
+            <TouchableOpacity onPress={() => setSearchQuery("")} style={styles.clearBtnClick}>
               <Text style={styles.clearBtnSymbol}>×</Text>
             </TouchableOpacity>
           )}
         </View>
 
-        {/* List Header */}
         <View style={styles.listHeaderRow}>
           <Text style={styles.promptHeadline}>
             Returning Patients{" "}
-            <Text style={styles.patientCount}>
-              ({filteredPatients.length})
-            </Text>
+            <Text style={styles.patientCount}>({filteredPatients.length})</Text>
           </Text>
         </View>
 
-        {/* Loading State */}
         {isLoading ? (
           <View style={{ alignItems: "center", marginTop: 48 }}>
             <ActivityIndicator size="large" color="#095c29" />
-            <Text style={[styles.emptyText, { marginTop: 12 }]}>
-              Loading patients...
-            </Text>
+            <Text style={[styles.emptyText, { marginTop: 12 }]}>Loading patients...</Text>
           </View>
         ) : filteredPatients.length === 0 ? (
           <Text style={styles.emptyText}>
-            {searchQuery
-              ? "No patients match your search."
-              : "No returning patients found."}
+            {searchQuery ? "No patients match your search." : "No returning patients found."}
           </Text>
         ) : (
           filteredPatients.map((patient) => (
@@ -255,6 +255,7 @@ export default function ReprescribeScreen() {
                     ? patient.gender.charAt(0).toUpperCase() + patient.gender.slice(1)
                     : "—"}{" "}
                   • DOB: {patient.birthdate ?? "—"}
+                  {patient.birthdate ? ` • Age: ${calculateAge(patient.birthdate)}` : ""}
                 </Text>
               </View>
 

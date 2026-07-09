@@ -1,14 +1,15 @@
-import { useRouter } from "expo-router";
-import { deletePatient, fetchPatients, updatePatient } from "@/api/patient";
 import { fetchPatientConsultations } from "@/api/consultation";
+import { deletePatient, fetchPatients, updatePatient } from "@/api/patient";
 import { useAuth } from "@/components/context/auth-context";
+import { patientRecordsStyles as styles } from "@/styles/patientRecordsStyles";
+import { calculateAge } from "@/utils/age";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert, Platform, RefreshControl, ScrollView,
   Text, TextInput, TouchableOpacity, View,
 } from "react-native";
-import { patientRecordsStyles as styles } from "@/styles/patientRecordsStyles";
 
 type PatientRecord = {
   id: number;
@@ -69,7 +70,6 @@ export default function PatientRecordsScreen() {
       }));
       setPatientDatabase(formattedData);
 
-      // Batch-check consultation history to determine new/old status
       const statusEntries = await Promise.all(
         formattedData.map(async (p: PatientRecord) => {
           try {
@@ -101,7 +101,7 @@ export default function PatientRecordsScreen() {
         `${p.firstName} ${p.lastName}`.toLowerCase().includes(q) ||
         `${p.lastName} ${p.firstName}`.toLowerCase().includes(q)
       )
-      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      .sort((a, b) => a.lastName.localeCompare(b.lastName));
   }, [patientDatabase, searchQuery]);
 
   const openEditForm = (patient: PatientRecord) => {
@@ -197,7 +197,7 @@ export default function PatientRecordsScreen() {
     );
   };
 
-  // --- VIEW RENDER 1: Edit Form (doctor and assistant can edit) ---
+  // --- VIEW RENDER 1: Edit Form ---
   if (isEditing) {
     return (
       <View style={styles.container}>
@@ -290,6 +290,21 @@ export default function PatientRecordsScreen() {
               maximumDate={new Date()}
             />
           )}
+
+          {/* Age — auto calculated */}
+          {birthdate ? (
+            <View style={styles.fieldWrapper}>
+              <Text style={styles.fieldLabelText}>Age</Text>
+              <View style={[styles.inputContainerRow, { backgroundColor: "#f8fafc" }]}>
+                <TextInput
+                  style={[styles.fieldInput, { color: "#64748b" }]}
+                  value={`${calculateAge(birthdate)} years old`}
+                  editable={false}
+                  pointerEvents="none"
+                />
+              </View>
+            </View>
+          ) : null}
 
           {/* Civil Status */}
           <View style={styles.fieldWrapper}>
@@ -522,20 +537,21 @@ export default function PatientRecordsScreen() {
                     </View>
                   )}
                 </View>
-                <Text style={styles.cardSubDetails}>{patient.gender} • DOB: {patient.birthdate}</Text>
+                <Text style={styles.cardSubDetails}>
+                  {patient.gender} • DOB: {patient.birthdate}
+                  {patient.birthdate ? ` • Age: ${calculateAge(patient.birthdate)}` : ""}
+                </Text>
                 {patient.mobileNumber ? (
                   <Text style={styles.cardSubDetails}>📱 +63 {patient.mobileNumber}</Text>
                 ) : null}
               </View>
               <View style={styles.cardActionsGroup}>
-                {/* Both doctor and assistant can edit */}
                 <TouchableOpacity
                   style={styles.editButton}
                   onPress={(e) => { e.stopPropagation(); openEditForm(patient); }}
                 >
                   <Text style={styles.editButtonText}>Edit</Text>
                 </TouchableOpacity>
-                {/* Only doctor can delete */}
                 {isDoctor && (
                   <TouchableOpacity
                     style={styles.deleteButton}

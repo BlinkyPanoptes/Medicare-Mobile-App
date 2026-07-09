@@ -1,21 +1,30 @@
+import { createBrand } from "@/api/brand";
 import apiClient from "@/api/client";
+import { getPrescriptionPdfSignedUrl } from "@/api/consultation";
 import { createDisease, fetchDiseases } from "@/api/disease";
+import { createGeneric } from "@/api/generic";
 import { removeFromQueue } from "@/api/queue";
 import { useAuth } from "@/components/context/auth-context";
+import { createPrescriptionStyles as styles } from "@/styles/createPrescriptionStyles";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
+  Keyboard,
+  KeyboardAvoidingView,
+  Linking,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from "react-native";
-import { createPrescriptionStyles as styles } from "@/styles/createPrescriptionStyles";
 
 // — Types —
 type Brand = {
@@ -65,6 +74,37 @@ type MedicationEntry = {
   instructions: string;
 };
 
+// — Floating field editor field keys —
+// Each key maps to exactly one text field somewhere on the screen.
+type FloatingFieldKey =
+  | "chiefComplaint"
+  | "notes"
+  | "dosage"
+  | "frequency"
+  | "duration"
+  | "instructions"
+  | "diagnosisSymptoms"
+  | "newGenericName"
+  | "newBrandName"
+  | "newDiseaseName"
+  | "newDiseaseDescription"
+  | "newDiseaseSymptoms";
+
+const FLOATING_FIELD_CONFIG: Record<FloatingFieldKey, { label: string; multiline?: boolean }> = {
+  chiefComplaint: { label: "Chief Complaint", multiline: true },
+  notes: { label: "Notes", multiline: true },
+  dosage: { label: "Dosage" },
+  frequency: { label: "Frequency" },
+  duration: { label: "Duration" },
+  instructions: { label: "Instructions", multiline: true },
+  diagnosisSymptoms: { label: "Symptoms", multiline: true },
+  newGenericName: { label: "Generic Name" },
+  newBrandName: { label: "Brand Name" },
+  newDiseaseName: { label: "Disease Name" },
+  newDiseaseDescription: { label: "Description", multiline: true },
+  newDiseaseSymptoms: { label: "General Symptoms", multiline: true },
+};
+
 function calculateAge(birthdate: string): number {
   const birth = new Date(birthdate);
   const today = new Date();
@@ -79,16 +119,25 @@ export default function CreatePrescriptionScreen() {
   const navigation = useNavigation();
   const { activeClinic, user } = useAuth();
 
-  const { patientId, patientName, patientGender, patientBirthdate, queueId, prefillMeds, prefillActiveDiagnoses } =
-    useLocalSearchParams<{
-      patientId: string;
-      patientName: string;
-      patientGender: string;
-      patientBirthdate: string;
-      queueId?: string;
-      prefillMeds?: string;
-      prefillActiveDiagnoses?: string;
-    }>();
+  const {
+    patientId, patientName, patientGender, patientBirthdate,
+    queueId, prefillMeds, prefillActiveDiagnoses,
+    patientTemperature, patientBloodPressure,
+    patientHeight, patientWeight, patientAllergies,
+  } = useLocalSearchParams<{
+    patientId: string;
+    patientName: string;
+    patientGender: string;
+    patientBirthdate: string;
+    queueId?: string;
+    prefillMeds?: string;
+    prefillActiveDiagnoses?: string;
+    patientTemperature?: string;
+    patientBloodPressure?: string;
+    patientHeight?: string;
+    patientWeight?: string;
+    patientAllergies?: string;
+  }>();
 
   // — Generics + Brands —
   const [generics, setGenerics] = useState<Generic[]>([]);
@@ -98,28 +147,22 @@ export default function CreatePrescriptionScreen() {
   // — Diseases —
   const [diseases, setDiseases] = useState<Disease[]>([]);
 
-  // — Active diagnoses from previous consultations (represcribe flow) —
+  // — Active diagnoses —
   const [activeDiagnoses, setActiveDiagnoses] = useState<ActiveDiagnosis[]>(() => {
     if (!prefillActiveDiagnoses) return [];
-    try {
-      return JSON.parse(prefillActiveDiagnoses as string) as ActiveDiagnosis[];
-    } catch {
-      return [];
-    }
+    try { return JSON.parse(prefillActiveDiagnoses as string) as ActiveDiagnosis[]; }
+    catch { return []; }
   });
   const [updatingDiagnosisId, setUpdatingDiagnosisId] = useState<number | null>(null);
 
-  // — New diagnoses for this consultation —
+  // — New diagnoses —
   const [diagnoses, setDiagnoses] = useState<DiagnosisEntry[]>([]);
 
   // — Medications —
   const [medications, setMedications] = useState<MedicationEntry[]>(() => {
     if (!prefillMeds) return [];
-    try {
-      return JSON.parse(prefillMeds as string) as MedicationEntry[];
-    } catch {
-      return [];
-    }
+    try { return JSON.parse(prefillMeds as string) as MedicationEntry[]; }
+    catch { return []; }
   });
 
   const [notes, setNotes] = useState("");
@@ -138,6 +181,12 @@ export default function CreatePrescriptionScreen() {
   const [genericPickerVisible, setGenericPickerVisible] = useState(false);
   const [brandPickerVisible, setBrandPickerVisible] = useState(false);
   const [genericSearch, setGenericSearch] = useState("");
+  const [showCreateGeneric, setShowCreateGeneric] = useState(false);
+  const [newGenericName, setNewGenericName] = useState("");
+  const [creatingGeneric, setCreatingGeneric] = useState(false);
+  const [showCreateBrand, setShowCreateBrand] = useState(false);
+  const [newBrandName, setNewBrandName] = useState("");
+  const [creatingBrand, setCreatingBrand] = useState(false);
 
   // — Disease modal —
   const [diseaseModalVisible, setDiseaseModalVisible] = useState(false);
@@ -146,13 +195,83 @@ export default function CreatePrescriptionScreen() {
   const [diagnosisType, setDiagnosisType] = useState<"primary" | "secondary">("primary");
   const [diagnosisSymptoms, setDiagnosisSymptoms] = useState("");
   const [editingDiagnosisKey, setEditingDiagnosisKey] = useState<string | null>(null);
-
-  // — Inline create disease inside disease modal —
   const [showCreateDisease, setShowCreateDisease] = useState(false);
   const [newDiseaseName, setNewDiseaseName] = useState("");
   const [newDiseaseDescription, setNewDiseaseDescription] = useState("");
   const [newDiseaseSymptoms, setNewDiseaseSymptoms] = useState("");
   const [creatingDisease, setCreatingDisease] = useState(false);
+
+  // — Floating field editor (login-screen pattern, generalized to N fields) —
+  const [activeField, setActiveField] = useState<FloatingFieldKey | null>(null);
+  const [floatingValue, setFloatingValue] = useState("");
+  const floatingRef = useRef<TextInput>(null);
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (activeField !== null) {
+        dismissFloating();
+        return true;
+      }
+      return false;
+    });
+    return () => subscription.remove();
+  }, [activeField, floatingValue]);
+
+  useEffect(() => {
+    const sub = Keyboard.addListener("keyboardDidHide", () => {
+      if (activeField !== null) dismissFloating();
+    });
+    return () => sub.remove();
+  }, [activeField, floatingValue]);
+
+  const getFieldValue = (field: FloatingFieldKey): string => {
+    switch (field) {
+      case "chiefComplaint": return chiefComplaint;
+      case "notes": return notes;
+      case "dosage": return dosage;
+      case "frequency": return frequency;
+      case "duration": return duration;
+      case "instructions": return instructions;
+      case "diagnosisSymptoms": return diagnosisSymptoms;
+      case "newGenericName": return newGenericName;
+      case "newBrandName": return newBrandName;
+      case "newDiseaseName": return newDiseaseName;
+      case "newDiseaseDescription": return newDiseaseDescription;
+      case "newDiseaseSymptoms": return newDiseaseSymptoms;
+    }
+  };
+
+  const setFieldValue = (field: FloatingFieldKey, value: string) => {
+    switch (field) {
+      case "chiefComplaint": setChiefComplaint(value); break;
+      case "notes": setNotes(value); break;
+      case "dosage": setDosage(value); break;
+      case "frequency": setFrequency(value); break;
+      case "duration": setDuration(value); break;
+      case "instructions": setInstructions(value); break;
+      case "diagnosisSymptoms": setDiagnosisSymptoms(value); break;
+      case "newGenericName": setNewGenericName(value); break;
+      case "newBrandName": setNewBrandName(value); break;
+      case "newDiseaseName": setNewDiseaseName(value); break;
+      case "newDiseaseDescription": setNewDiseaseDescription(value); break;
+      case "newDiseaseSymptoms": setNewDiseaseSymptoms(value); break;
+    }
+  };
+
+  const openFloating = (field: FloatingFieldKey) => {
+    setFloatingValue(getFieldValue(field));
+    setActiveField(field);
+  };
+
+  const dismissFloating = () => {
+    if (activeField !== null) {
+      setFieldValue(activeField, floatingValue);
+    }
+    setActiveField(null);
+    Keyboard.dismiss();
+  };
+
+  const activeFieldConfig = activeField ? FLOATING_FIELD_CONFIG[activeField] : null;
 
   const age = patientBirthdate ? calculateAge(patientBirthdate) : null;
   const capitalizedGender = patientGender
@@ -169,7 +288,6 @@ export default function CreatePrescriptionScreen() {
     });
   }, [navigation]);
 
-  // Load generics, brands, diseases on mount
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -193,11 +311,9 @@ export default function CreatePrescriptionScreen() {
   const filteredGenerics = generics.filter((g) =>
     g.generic_name.toLowerCase().includes(genericSearch.toLowerCase())
   );
-
   const filteredBrands = selectedGeneric
     ? brands.filter((b) => b.generic_id === selectedGeneric.id)
     : [];
-
   const filteredDiseases = diseases.filter((d) =>
     d.disease_name.toLowerCase().includes(diseaseSearch.toLowerCase())
   );
@@ -205,25 +321,19 @@ export default function CreatePrescriptionScreen() {
   // — Medication handlers —
   const openAddModal = () => {
     setEditingKey(null);
-    setSelectedGeneric(null);
-    setSelectedBrand(null);
-    setDosage("");
-    setFrequency("");
-    setDuration("");
-    setInstructions("");
+    setSelectedGeneric(null); setSelectedBrand(null);
+    setDosage(""); setFrequency(""); setDuration(""); setInstructions("");
+    setShowCreateGeneric(false); setShowCreateBrand(false);
+    setNewGenericName(""); setNewBrandName("");
     setModalVisible(true);
   };
 
   const openEditModal = (med: MedicationEntry) => {
     setEditingKey(med.key);
-    const generic = generics.find((g) => g.id === med.generic_id) ?? null;
-    const brand = brands.find((b) => b.id === med.brand_id) ?? null;
-    setSelectedGeneric(generic);
-    setSelectedBrand(brand);
-    setDosage(med.dosage);
-    setFrequency(med.frequency);
-    setDuration(med.duration);
-    setInstructions(med.instructions);
+    setSelectedGeneric(generics.find((g) => g.id === med.generic_id) ?? null);
+    setSelectedBrand(brands.find((b) => b.id === med.brand_id) ?? null);
+    setDosage(med.dosage); setFrequency(med.frequency);
+    setDuration(med.duration); setInstructions(med.instructions);
     setModalVisible(true);
   };
 
@@ -242,10 +352,7 @@ export default function CreatePrescriptionScreen() {
       brand_id: selectedBrand.id,
       generic_name: selectedGeneric.generic_name,
       brand_name: selectedBrand.brand_name,
-      dosage,
-      frequency,
-      duration,
-      instructions,
+      dosage, frequency, duration, instructions,
     };
     if (editingKey) {
       setMedications((prev) => prev.map((m) => m.key === editingKey ? entry : m));
@@ -258,54 +365,63 @@ export default function CreatePrescriptionScreen() {
   const handleRemoveMedication = (key: string) => {
     Alert.alert("Remove Medication", "Remove this medication from the prescription?", [
       { text: "Cancel", style: "cancel" },
-      {
-        text: "Remove",
-        style: "destructive",
-        onPress: () => setMedications((prev) => prev.filter((m) => m.key !== key)),
-      },
+      { text: "Remove", style: "destructive", onPress: () => setMedications((prev) => prev.filter((m) => m.key !== key)) },
     ]);
+  };
+
+  const handleCreateGeneric = async () => {
+    if (!newGenericName.trim()) { Alert.alert("Missing Field", "Generic name is required."); return; }
+    setCreatingGeneric(true);
+    try {
+      const res = await createGeneric({ generic_name: newGenericName.trim() });
+      const created: Generic = { ...res.data.generic, brands: [] };
+      setGenerics((prev) => [...prev, created]);
+      setSelectedGeneric(created); setSelectedBrand(null);
+      setNewGenericName(""); setShowCreateGeneric(false); setGenericPickerVisible(false);
+      setBrandPickerVisible(true);
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || (Object.values(err?.response?.data?.errors ?? {}) as string[][])?.[0]?.[0] || "Could not create generic.";
+      Alert.alert("Error", msg);
+    } finally { setCreatingGeneric(false); }
+  };
+
+  const handleCreateBrand = async () => {
+    if (!selectedGeneric) { Alert.alert("Error", "No generic selected."); return; }
+    if (!newBrandName.trim()) { Alert.alert("Missing Field", "Brand name is required."); return; }
+    setCreatingBrand(true);
+    try {
+      const res = await createBrand({ generic_id: selectedGeneric.id, brand_name: newBrandName.trim() });
+      const created: Brand & { generic_id: number } = { ...res.data.brand, generic_id: selectedGeneric.id };
+      setBrands((prev) => [...prev, created]);
+      setSelectedBrand(created);
+      setNewBrandName(""); setShowCreateBrand(false); setBrandPickerVisible(false);
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || (Object.values(err?.response?.data?.errors ?? {}) as string[][])?.[0]?.[0] || "Could not create brand.";
+      Alert.alert("Error", msg);
+    } finally { setCreatingBrand(false); }
   };
 
   // — Disease handlers —
   const openAddDiseaseModal = () => {
-    setEditingDiagnosisKey(null);
-    setSelectedDisease(null);
-    setDiagnosisType("primary");
-    setDiagnosisSymptoms("");
-    setDiseaseSearch("");
-    setShowCreateDisease(false);
-    setNewDiseaseName("");
-    setNewDiseaseDescription("");
-    setNewDiseaseSymptoms("");
+    setEditingDiagnosisKey(null); setSelectedDisease(null);
+    setDiagnosisType("primary"); setDiagnosisSymptoms("");
+    setDiseaseSearch(""); setShowCreateDisease(false);
+    setNewDiseaseName(""); setNewDiseaseDescription(""); setNewDiseaseSymptoms("");
     setDiseaseModalVisible(true);
   };
 
   const openEditDiseaseModal = (diagnosis: DiagnosisEntry) => {
     setEditingDiagnosisKey(diagnosis.key);
-    const disease = diseases.find((d) => d.id === diagnosis.disease_id) ?? null;
-    setSelectedDisease(disease);
-    setDiagnosisType(diagnosis.type);
-    setDiagnosisSymptoms(diagnosis.symptoms);
-    setDiseaseSearch("");
-    setShowCreateDisease(false);
+    setSelectedDisease(diseases.find((d) => d.id === diagnosis.disease_id) ?? null);
+    setDiagnosisType(diagnosis.type); setDiagnosisSymptoms(diagnosis.symptoms);
+    setDiseaseSearch(""); setShowCreateDisease(false);
     setDiseaseModalVisible(true);
   };
 
   const handleSaveDiagnosis = () => {
-    if (!selectedDisease) {
-      Alert.alert("Missing Fields", "Please select a disease.");
-      return;
-    }
-
-    // Prevent duplicate disease in same consultation
-    const isDuplicate = diagnoses.some(
-      (d) => d.disease_id === selectedDisease.id && d.key !== editingDiagnosisKey
-    );
-    if (isDuplicate) {
-      Alert.alert("Duplicate", "This disease has already been added to this consultation.");
-      return;
-    }
-
+    if (!selectedDisease) { Alert.alert("Missing Fields", "Please select a disease."); return; }
+    const isDuplicate = diagnoses.some((d) => d.disease_id === selectedDisease.id && d.key !== editingDiagnosisKey);
+    if (isDuplicate) { Alert.alert("Duplicate", "This disease has already been added to this consultation."); return; }
     const entry: DiagnosisEntry = {
       key: editingDiagnosisKey ?? Date.now().toString(),
       disease_id: selectedDisease.id,
@@ -313,7 +429,6 @@ export default function CreatePrescriptionScreen() {
       type: diagnosisType,
       symptoms: diagnosisSymptoms,
     };
-
     if (editingDiagnosisKey) {
       setDiagnoses((prev) => prev.map((d) => d.key === editingDiagnosisKey ? entry : d));
     } else {
@@ -325,19 +440,12 @@ export default function CreatePrescriptionScreen() {
   const handleRemoveDiagnosis = (key: string) => {
     Alert.alert("Remove Diagnosis", "Remove this diagnosis from the consultation?", [
       { text: "Cancel", style: "cancel" },
-      {
-        text: "Remove",
-        style: "destructive",
-        onPress: () => setDiagnoses((prev) => prev.filter((d) => d.key !== key)),
-      },
+      { text: "Remove", style: "destructive", onPress: () => setDiagnoses((prev) => prev.filter((d) => d.key !== key)) },
     ]);
   };
 
   const handleCreateDisease = async () => {
-    if (!newDiseaseName.trim()) {
-      Alert.alert("Missing Fields", "Disease name is required.");
-      return;
-    }
+    if (!newDiseaseName.trim()) { Alert.alert("Missing Fields", "Disease name is required."); return; }
     setCreatingDisease(true);
     try {
       const res = await createDisease({
@@ -346,27 +454,17 @@ export default function CreatePrescriptionScreen() {
         symptoms: newDiseaseSymptoms.trim() || null,
       });
       const created: Disease = res.data.disease;
-
-      // Add to local list and auto-select it
       setDiseases((prev) => [...prev, created]);
       setSelectedDisease(created);
       setShowCreateDisease(false);
-      setNewDiseaseName("");
-      setNewDiseaseDescription("");
-      setNewDiseaseSymptoms("");
+      setNewDiseaseName(""); setNewDiseaseDescription(""); setNewDiseaseSymptoms("");
       Alert.alert("Success", `"${created.disease_name}" created and selected.`);
     } catch (error: any) {
-      const message =
-        error.response?.data?.message ||
-        (Object.values(error.response?.data?.errors ?? {}) as string[][])?.[0]?.[0] ||
-        "Could not create disease.";
+      const message = error.response?.data?.message || (Object.values(error.response?.data?.errors ?? {}) as string[][])?.[0]?.[0] || "Could not create disease.";
       Alert.alert("Error", message);
-    } finally {
-      setCreatingDisease(false);
-    }
+    } finally { setCreatingDisease(false); }
   };
 
-  // — Update active diagnosis status —
   const handleUpdateDiagnosisStatus = async (
     diagnosis: ActiveDiagnosis,
     newStatus: "ongoing" | "treated" | "referred"
@@ -378,39 +476,24 @@ export default function CreatePrescriptionScreen() {
         { status: newStatus }
       );
       setActiveDiagnoses((prev) =>
-        prev.map((d) =>
-          d.diagnosis_id === diagnosis.diagnosis_id ? { ...d, status: newStatus as any } : d
-        )
+        prev.map((d) => d.diagnosis_id === diagnosis.diagnosis_id ? { ...d, status: newStatus as any } : d)
       );
-      // Remove from active list if marked as treated
       if (newStatus === "treated") {
-        setActiveDiagnoses((prev) =>
-          prev.filter((d) => d.diagnosis_id !== diagnosis.diagnosis_id)
-        );
+        setActiveDiagnoses((prev) => prev.filter((d) => d.diagnosis_id !== diagnosis.diagnosis_id));
       }
       Alert.alert("Updated", `Diagnosis marked as ${newStatus}.`);
     } catch {
       Alert.alert("Error", "Could not update diagnosis status.");
-    } finally {
-      setUpdatingDiagnosisId(null);
-    }
+    } finally { setUpdatingDiagnosisId(null); }
   };
 
-  // — Submit —
   const handleSubmit = async () => {
-    if (medications.length === 0) {
-      Alert.alert("No Medications", "Please add at least one medication.");
-      return;
-    }
-    if (!activeClinic) {
-      Alert.alert("No Clinic", "No active clinic selected.");
-      return;
-    }
+    if (medications.length === 0) { Alert.alert("No Medications", "Please add at least one medication."); return; }
+    if (!activeClinic) { Alert.alert("No Clinic", "No active clinic selected."); return; }
 
     setIsSubmitting(true);
     try {
       const consultationDate = new Date().toISOString().replace("T", " ").substring(0, 19);
-
       const payload = {
         patient_id: Number(patientId),
         clinic_id: activeClinic.id,
@@ -433,30 +516,38 @@ export default function CreatePrescriptionScreen() {
         })),
       };
 
-      await apiClient.post("/consultations", payload);
+      const res = await apiClient.post("/consultations", payload);
 
-      // Remove patient from queue now that prescription is saved
       if (queueId) {
-        try {
-          await removeFromQueue(Number(queueId));
-        } catch {
-          console.log("queueId param:", queueId);
-          // Non-blocking — queue removal failure shouldn't stop the success flow
-        }
+        try { await removeFromQueue(Number(queueId)); }
+        catch { console.log("queueId param:", queueId); }
       }
 
-      Alert.alert("Success", "Consultation and prescription saved.", [
-        { text: "OK", onPress: () => router.back() },
-      ]);
+      const savedConsultation = res.data.consultation;
+
+      Alert.alert(
+        "Consultation Saved",
+        "Would you like to print the prescription?",
+        [
+          { text: "No", style: "cancel", onPress: () => router.back() },
+          {
+            text: "Yes, Print",
+            onPress: async () => {
+              try {
+                const signedRes = await getPrescriptionPdfSignedUrl(savedConsultation.id);
+                await Linking.openURL(signedRes.data.url);
+              } catch {
+                Alert.alert("Error", "Could not generate prescription PDF.");
+              }
+              router.back();
+            },
+          },
+        ]
+      );
     } catch (err: any) {
-      const message =
-        err?.response?.data?.message ||
-        (Object.values(err?.response?.data?.errors ?? {}) as string[][])?.[0]?.[0] ||
-        "Failed to save consultation.";
+      const message = err?.response?.data?.message || (Object.values(err?.response?.data?.errors ?? {}) as string[][])?.[0]?.[0] || "Failed to save consultation.";
       Alert.alert("Error", message);
-    } finally {
-      setIsSubmitting(false);
-    }
+    } finally { setIsSubmitting(false); }
   };
 
   return (
@@ -476,25 +567,64 @@ export default function CreatePrescriptionScreen() {
             <View style={styles.patientCardInfo}>
               <Text style={styles.patientCardCode}>Patient ID: {patientId}</Text>
               <Text style={styles.patientCardName}>{patientName}</Text>
+
+              {/* Gender & Age */}
               <Text style={styles.patientCardSub}>
                 {capitalizedGender}{age !== null ? ` • ${age} years old` : ""}
               </Text>
+
+              {/* Height & Weight */}
+              {(patientHeight || patientWeight) ? (
+                <Text style={styles.patientCardSub}>
+                  {patientHeight ? `📏 ${patientHeight} cm` : ""}
+                  {patientHeight && patientWeight ? "  " : ""}
+                  {patientWeight ? `⚖️ ${patientWeight} kg` : ""}
+                </Text>
+              ) : null}
+
+              {/* Temp & BP */}
+              {(patientTemperature || patientBloodPressure) ? (
+                <Text style={styles.patientCardSub}>
+                  {patientTemperature ? `🌡 ${patientTemperature} °C` : ""}
+                  {patientTemperature && patientBloodPressure ? "  " : ""}
+                  {patientBloodPressure ? `💉 ${patientBloodPressure} mmHg` : ""}
+                </Text>
+              ) : null}
+
+              {/* Allergies warning */}
+              {patientAllergies ? (
+                <View style={{
+                  marginTop: 8,
+                  backgroundColor: "#fef9c3",
+                  borderRadius: 6,
+                  padding: 8,
+                  borderWidth: 1,
+                  borderColor: "#fde68a",
+                }}>
+                  <Text style={{ fontSize: 12, color: "#92400e", fontWeight: "600" }}>
+                    ⚠️ Allergies: {patientAllergies}
+                  </Text>
+                </View>
+              ) : null}
             </View>
           </View>
 
           {/* CHIEF COMPLAINT */}
           <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Chief Complaint</Text>
-          <TextInput
-            style={styles.textArea}
-            value={chiefComplaint}
-            onChangeText={setChiefComplaint}
-            placeholder="e.g. Fever and headache for 3 days"
-            placeholderTextColor="#94a3b8"
-            multiline
-            textAlignVertical="top"
-          />
+          <TouchableOpacity activeOpacity={1} onPress={() => openFloating("chiefComplaint")}>
+            <TextInput
+              style={styles.textArea}
+              value={chiefComplaint}
+              placeholder="e.g. Fever and headache for 3 days"
+              placeholderTextColor="#94a3b8"
+              multiline
+              textAlignVertical="top"
+              editable={false}
+              pointerEvents="none"
+            />
+          </TouchableOpacity>
 
-          {/* ACTIVE DIAGNOSES — represcribe flow only */}
+          {/* ACTIVE DIAGNOSES */}
           {activeDiagnoses.length > 0 && (
             <>
               <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Active Diagnoses</Text>
@@ -507,7 +637,7 @@ export default function CreatePrescriptionScreen() {
                     <Text style={styles.activeDiagName}>{diag.disease_name}</Text>
                     <View style={[
                       styles.statusBadge,
-                      diag.status === "ongoing" ? styles.statusOngoing : styles.statusReferred
+                      diag.status === "ongoing" ? styles.statusOngoing : styles.statusReferred,
                     ]}>
                       <Text style={styles.statusBadgeText}>{diag.status}</Text>
                     </View>
@@ -518,8 +648,6 @@ export default function CreatePrescriptionScreen() {
                   <Text style={styles.activeDiagType}>
                     {diag.type.charAt(0).toUpperCase() + diag.type.slice(1)} diagnosis
                   </Text>
-
-                  {/* Status update buttons */}
                   <View style={styles.diagStatusRow}>
                     {diag.status !== "treated" && (
                       <TouchableOpacity
@@ -527,11 +655,10 @@ export default function CreatePrescriptionScreen() {
                         disabled={updatingDiagnosisId === diag.diagnosis_id}
                         onPress={() => handleUpdateDiagnosisStatus(diag, "treated")}
                       >
-                        {updatingDiagnosisId === diag.diagnosis_id ? (
-                          <ActivityIndicator size="small" color="#095c29" />
-                        ) : (
-                          <Text style={styles.diagStatusBtnText}>✓ Treated</Text>
-                        )}
+                        {updatingDiagnosisId === diag.diagnosis_id
+                          ? <ActivityIndicator size="small" color="#095c29" />
+                          : <Text style={styles.diagStatusBtnText}>✓ Treated</Text>
+                        }
                       </TouchableOpacity>
                     )}
                     {diag.status !== "referred" && (
@@ -566,7 +693,6 @@ export default function CreatePrescriptionScreen() {
           <Text style={[styles.sectionTitle, { marginTop: 24 }]}>
             Diagnoses <Text style={styles.optionalTag}>(Optional)</Text>
           </Text>
-
           {diagnoses.length === 0 ? (
             <View style={styles.emptyMedBox}>
               <Text style={styles.emptyMedText}>No diagnoses added yet.</Text>
@@ -584,34 +710,22 @@ export default function CreatePrescriptionScreen() {
                   <Text style={styles.medGenericName}>{diag.symptoms}</Text>
                 ) : null}
                 <View style={styles.medActionRow}>
-                  <TouchableOpacity
-                    style={styles.changeBtn}
-                    onPress={() => openEditDiseaseModal(diag)}
-                  >
+                  <TouchableOpacity style={styles.changeBtn} onPress={() => openEditDiseaseModal(diag)}>
                     <Text style={styles.changeBtnText}>Edit</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.removeBtn}
-                    onPress={() => handleRemoveDiagnosis(diag.key)}
-                  >
+                  <TouchableOpacity style={styles.removeBtn} onPress={() => handleRemoveDiagnosis(diag.key)}>
                     <Text style={styles.removeBtnText}>Remove</Text>
                   </TouchableOpacity>
                 </View>
               </View>
             ))
           )}
-
-          <TouchableOpacity
-            style={styles.addMedBtn}
-            onPress={openAddDiseaseModal}
-            activeOpacity={0.8}
-          >
+          <TouchableOpacity style={styles.addMedBtn} onPress={openAddDiseaseModal} activeOpacity={0.8}>
             <Text style={styles.addMedBtnText}>+ ADD DIAGNOSIS</Text>
           </TouchableOpacity>
 
           {/* MEDICATIONS */}
           <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Medications</Text>
-
           {genericsLoading ? (
             <View style={styles.loadingBox}>
               <ActivityIndicator size="small" color="#095c29" />
@@ -636,38 +750,33 @@ export default function CreatePrescriptionScreen() {
                   <TouchableOpacity style={styles.changeBtn} onPress={() => openEditModal(med)}>
                     <Text style={styles.changeBtnText}>Edit</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.removeBtn}
-                    onPress={() => handleRemoveMedication(med.key)}
-                  >
+                  <TouchableOpacity style={styles.removeBtn} onPress={() => handleRemoveMedication(med.key)}>
                     <Text style={styles.removeBtnText}>Remove</Text>
                   </TouchableOpacity>
                 </View>
               </View>
             ))
           )}
-
           {!genericsLoading && (
-            <TouchableOpacity
-              style={styles.addMedBtn}
-              onPress={openAddModal}
-              activeOpacity={0.8}
-            >
+            <TouchableOpacity style={styles.addMedBtn} onPress={openAddModal} activeOpacity={0.8}>
               <Text style={styles.addMedBtnText}>+ ADD MEDICATION</Text>
             </TouchableOpacity>
           )}
 
           {/* NOTES */}
           <Text style={styles.notesLabel}>Notes</Text>
-          <TextInput
-            style={styles.textArea}
-            value={notes}
-            onChangeText={setNotes}
-            placeholder="Add clinical notes here..."
-            placeholderTextColor="#94a3b8"
-            multiline
-            textAlignVertical="top"
-          />
+          <TouchableOpacity activeOpacity={1} onPress={() => openFloating("notes")}>
+            <TextInput
+              style={styles.textArea}
+              value={notes}
+              placeholder="Add clinical notes here..."
+              placeholderTextColor="#94a3b8"
+              multiline
+              textAlignVertical="top"
+              editable={false}
+              pointerEvents="none"
+            />
+          </TouchableOpacity>
         </ScrollView>
 
         {/* SUBMIT */}
@@ -726,12 +835,11 @@ export default function CreatePrescriptionScreen() {
                 <Text style={styles.selectorChevron}>▾</Text>
               </TouchableOpacity>
 
-              <ModalField label="Dosage *" value={dosage} onChange={setDosage} placeholder="e.g. 500mg" />
-              <ModalField label="Frequency *" value={frequency} onChange={setFrequency} placeholder="e.g. 3x a day" />
-              <ModalField label="Duration *" value={duration} onChange={setDuration} placeholder="e.g. 7 days" />
-              <ModalField label="Instructions (optional)" value={instructions} onChange={setInstructions} placeholder="e.g. Take after meals" />
+              <ModalField label="Dosage *" value={dosage} placeholder="e.g. 500mg" onPress={() => openFloating("dosage")} />
+              <ModalField label="Frequency *" value={frequency} placeholder="e.g. 3x a day" onPress={() => openFloating("frequency")} />
+              <ModalField label="Duration *" value={duration} placeholder="e.g. 7 days" onPress={() => openFloating("duration")} />
+              <ModalField label="Instructions (optional)" value={instructions} placeholder="e.g. Take after meals" onPress={() => openFloating("instructions")} />
             </ScrollView>
-
             <TouchableOpacity style={styles.modalSaveBtn} onPress={handleSaveMedication}>
               <Text style={styles.modalSaveBtnText}>Save Medication</Text>
             </TouchableOpacity>
@@ -744,43 +852,92 @@ export default function CreatePrescriptionScreen() {
         visible={genericPickerVisible}
         transparent
         animationType="slide"
-        onRequestClose={() => setGenericPickerVisible(false)}
+        onRequestClose={() => {
+          setGenericPickerVisible(false);
+          setShowCreateGeneric(false);
+          setNewGenericName("");
+        }}
       >
-        <Pressable style={styles.modalBackdrop} onPress={() => setGenericPickerVisible(false)}>
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => {
+            setGenericPickerVisible(false);
+            setShowCreateGeneric(false);
+            setNewGenericName("");
+          }}
+        >
           <Pressable style={styles.modalSheet} onPress={() => {}}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Select Generic</Text>
-            <TextInput
-              style={styles.pickerSearch}
-              placeholder="Search generics..."
-              placeholderTextColor="#94a3b8"
-              value={genericSearch}
-              onChangeText={setGenericSearch}
-            />
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 340 }}>
-              {filteredGenerics.map((g) => (
+            {!showCreateGeneric ? (
+              <>
+                <Text style={styles.modalTitle}>Select Generic</Text>
+                <TextInput
+                  style={styles.pickerSearch}
+                  placeholder="Search generics..."
+                  placeholderTextColor="#94a3b8"
+                  value={genericSearch}
+                  onChangeText={setGenericSearch}
+                />
+                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 300 }}>
+                  {filteredGenerics.length === 0 ? (
+                    <Text style={styles.emptyMedText}>No generics found.</Text>
+                  ) : (
+                    filteredGenerics.map((g) => (
+                      <TouchableOpacity
+                        key={g.id}
+                        style={[styles.pickerItem, selectedGeneric?.id === g.id && styles.pickerItemSelected]}
+                        onPress={() => {
+                          setSelectedGeneric(g); setSelectedBrand(null);
+                          setGenericSearch(""); setGenericPickerVisible(false);
+                          setBrandPickerVisible(true);
+                        }}
+                      >
+                        <Text style={[styles.pickerItemText, selectedGeneric?.id === g.id && styles.pickerItemTextSelected]}>
+                          {g.generic_name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </ScrollView>
                 <TouchableOpacity
-                  key={g.id}
-                  style={[
-                    styles.pickerItem,
-                    selectedGeneric?.id === g.id && styles.pickerItemSelected,
-                  ]}
-                  onPress={() => {
-                    setSelectedGeneric(g);
-                    setSelectedBrand(null);
-                    setGenericSearch("");
-                    setGenericPickerVisible(false);
-                  }}
+                  style={[styles.modalSaveBtn, { backgroundColor: "#f0fdf4", marginTop: 12 }]}
+                  onPress={() => { setGenericSearch(""); setShowCreateGeneric(true); }}
                 >
-                  <Text style={[
-                    styles.pickerItemText,
-                    selectedGeneric?.id === g.id && styles.pickerItemTextSelected,
-                  ]}>
-                    {g.generic_name}
+                  <Text style={[styles.modalSaveBtnText, { color: "#095c29" }]}>
+                    + Create New Generic
                   </Text>
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
+              </>
+            ) : (
+              <>
+                <View style={styles.createDiseaseHeader}>
+                  <Text style={styles.modalTitle}>New Generic</Text>
+                  <TouchableOpacity onPress={() => { setShowCreateGeneric(false); setNewGenericName(""); }}>
+                    <Text style={styles.cancelCreateText}>← Back</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.modalFieldLabel}>Generic Name *</Text>
+                <TouchableOpacity activeOpacity={1} onPress={() => openFloating("newGenericName")}>
+                  <TextInput
+                    style={styles.modalFieldInput}
+                    value={newGenericName}
+                    placeholder="e.g. Paracetamol"
+                    placeholderTextColor="#94a3b8"
+                    editable={false}
+                    pointerEvents="none"
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalSaveBtn, { marginTop: 16 }, creatingGeneric && { opacity: 0.6 }]}
+                  onPress={handleCreateGeneric}
+                  disabled={creatingGeneric}
+                >
+                  <Text style={styles.modalSaveBtnText}>
+                    {creatingGeneric ? "Creating..." : "Create Generic"}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
           </Pressable>
         </Pressable>
       </Modal>
@@ -790,37 +947,85 @@ export default function CreatePrescriptionScreen() {
         visible={brandPickerVisible}
         transparent
         animationType="slide"
-        onRequestClose={() => setBrandPickerVisible(false)}
+        onRequestClose={() => {
+          setBrandPickerVisible(false);
+          setShowCreateBrand(false);
+          setNewBrandName("");
+        }}
       >
-        <Pressable style={styles.modalBackdrop} onPress={() => setBrandPickerVisible(false)}>
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => {
+            setBrandPickerVisible(false);
+            setShowCreateBrand(false);
+            setNewBrandName("");
+          }}
+        >
           <Pressable style={styles.modalSheet} onPress={() => {}}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Select Brand</Text>
-            <Text style={styles.pickerSubtitle}>
-              Brands for: {selectedGeneric?.generic_name}
-            </Text>
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 340 }}>
-              {filteredBrands.map((b) => (
+            {!showCreateBrand ? (
+              <>
+                <Text style={styles.modalTitle}>Select Brand</Text>
+                <Text style={styles.pickerSubtitle}>
+                  Brands for: {selectedGeneric?.generic_name}
+                </Text>
+                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 300 }}>
+                  {filteredBrands.length === 0 ? (
+                    <Text style={styles.emptyMedText}>No brands found for this generic.</Text>
+                  ) : (
+                    filteredBrands.map((b) => (
+                      <TouchableOpacity
+                        key={b.id}
+                        style={[styles.pickerItem, selectedBrand?.id === b.id && styles.pickerItemSelected]}
+                        onPress={() => { setSelectedBrand(b); setBrandPickerVisible(false); }}
+                      >
+                        <Text style={[styles.pickerItemText, selectedBrand?.id === b.id && styles.pickerItemTextSelected]}>
+                          {b.brand_name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </ScrollView>
                 <TouchableOpacity
-                  key={b.id}
-                  style={[
-                    styles.pickerItem,
-                    selectedBrand?.id === b.id && styles.pickerItemSelected,
-                  ]}
-                  onPress={() => {
-                    setSelectedBrand(b);
-                    setBrandPickerVisible(false);
-                  }}
+                  style={[styles.modalSaveBtn, { backgroundColor: "#f0fdf4", marginTop: 12 }]}
+                  onPress={() => setShowCreateBrand(true)}
                 >
-                  <Text style={[
-                    styles.pickerItemText,
-                    selectedBrand?.id === b.id && styles.pickerItemTextSelected,
-                  ]}>
-                    {b.brand_name}
+                  <Text style={[styles.modalSaveBtnText, { color: "#095c29" }]}>
+                    + Create New Brand
                   </Text>
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
+              </>
+            ) : (
+              <>
+                <View style={styles.createDiseaseHeader}>
+                  <Text style={styles.modalTitle}>New Brand</Text>
+                  <TouchableOpacity onPress={() => { setShowCreateBrand(false); setNewBrandName(""); }}>
+                    <Text style={styles.cancelCreateText}>← Back</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.modalFieldLabel}>Generic: {selectedGeneric?.generic_name}</Text>
+                <Text style={[styles.modalFieldLabel, { marginTop: 12 }]}>Brand Name *</Text>
+                <TouchableOpacity activeOpacity={1} onPress={() => openFloating("newBrandName")}>
+                  <TextInput
+                    style={styles.modalFieldInput}
+                    value={newBrandName}
+                    placeholder="e.g. Biogesic"
+                    placeholderTextColor="#94a3b8"
+                    editable={false}
+                    pointerEvents="none"
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalSaveBtn, { marginTop: 16 }, creatingBrand && { opacity: 0.6 }]}
+                  onPress={handleCreateBrand}
+                  disabled={creatingBrand}
+                >
+                  <Text style={styles.modalSaveBtnText}>
+                    {creatingBrand ? "Creating..." : "Create Brand & Select"}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
           </Pressable>
         </Pressable>
       </Modal>
@@ -838,11 +1043,9 @@ export default function CreatePrescriptionScreen() {
             <Text style={styles.modalTitle}>
               {editingDiagnosisKey ? "Edit Diagnosis" : "Add Diagnosis"}
             </Text>
-
             <ScrollView showsVerticalScrollIndicator={false}>
               {!showCreateDisease ? (
                 <>
-                  {/* Disease search + list */}
                   <Text style={styles.modalFieldLabel}>Disease *</Text>
                   <TextInput
                     style={styles.pickerSearch}
@@ -851,7 +1054,6 @@ export default function CreatePrescriptionScreen() {
                     value={diseaseSearch}
                     onChangeText={setDiseaseSearch}
                   />
-
                   <ScrollView
                     showsVerticalScrollIndicator={false}
                     style={{ maxHeight: 180 }}
@@ -863,114 +1065,95 @@ export default function CreatePrescriptionScreen() {
                       filteredDiseases.map((d) => (
                         <TouchableOpacity
                           key={d.id}
-                          style={[
-                            styles.pickerItem,
-                            selectedDisease?.id === d.id && styles.pickerItemSelected,
-                          ]}
+                          style={[styles.pickerItem, selectedDisease?.id === d.id && styles.pickerItemSelected]}
                           onPress={() => setSelectedDisease(d)}
                         >
-                          <Text style={[
-                            styles.pickerItemText,
-                            selectedDisease?.id === d.id && styles.pickerItemTextSelected,
-                          ]}>
+                          <Text style={[styles.pickerItemText, selectedDisease?.id === d.id && styles.pickerItemTextSelected]}>
                             {d.disease_name}
                           </Text>
                         </TouchableOpacity>
                       ))
                     )}
                   </ScrollView>
-
-                  {/* Create new disease shortcut */}
                   <TouchableOpacity
                     style={styles.createDiseaseLink}
                     onPress={() => setShowCreateDisease(true)}
                   >
                     <Text style={styles.createDiseaseLinkText}>+ Create new disease</Text>
                   </TouchableOpacity>
-
-                  {/* Type selector */}
-                  <Text style={[styles.modalFieldLabel, { marginTop: 14 }]}>
-                    Diagnosis Type *
-                  </Text>
+                  <Text style={[styles.modalFieldLabel, { marginTop: 14 }]}>Diagnosis Type *</Text>
                   <View style={styles.typeRow}>
                     {(["primary", "secondary"] as const).map((t) => (
                       <TouchableOpacity
                         key={t}
-                        style={[
-                          styles.typeBtn,
-                          diagnosisType === t && styles.typeBtnActive,
-                        ]}
+                        style={[styles.typeBtn, diagnosisType === t && styles.typeBtnActive]}
                         onPress={() => setDiagnosisType(t)}
                       >
-                        <Text style={[
-                          styles.typeBtnText,
-                          diagnosisType === t && styles.typeBtnTextActive,
-                        ]}>
+                        <Text style={[styles.typeBtnText, diagnosisType === t && styles.typeBtnTextActive]}>
                           {t.charAt(0).toUpperCase() + t.slice(1)}
                         </Text>
                       </TouchableOpacity>
                     ))}
                   </View>
-
-                  {/* Symptoms */}
-                  <Text style={[styles.modalFieldLabel, { marginTop: 14 }]}>
-                    Symptoms (optional)
-                  </Text>
-                  <TextInput
-                    style={[styles.modalFieldInput, { height: 80 }]}
-                    value={diagnosisSymptoms}
-                    onChangeText={setDiagnosisSymptoms}
-                    placeholder="e.g. High fever, productive cough"
-                    placeholderTextColor="#94a3b8"
-                    multiline
-                    textAlignVertical="top"
-                  />
+                  <Text style={[styles.modalFieldLabel, { marginTop: 14 }]}>Symptoms (optional)</Text>
+                  <TouchableOpacity activeOpacity={1} onPress={() => openFloating("diagnosisSymptoms")}>
+                    <TextInput
+                      style={[styles.modalFieldInput, { height: 80 }]}
+                      value={diagnosisSymptoms}
+                      placeholder="e.g. High fever, productive cough"
+                      placeholderTextColor="#94a3b8"
+                      multiline
+                      textAlignVertical="top"
+                      editable={false}
+                      pointerEvents="none"
+                    />
+                  </TouchableOpacity>
                 </>
               ) : (
                 <>
-                  {/* Inline create disease form */}
                   <View style={styles.createDiseaseHeader}>
                     <Text style={styles.modalTitle}>New Disease</Text>
                     <TouchableOpacity onPress={() => setShowCreateDisease(false)}>
                       <Text style={styles.cancelCreateText}>← Back</Text>
                     </TouchableOpacity>
                   </View>
-
                   <Text style={styles.modalFieldLabel}>Disease Name *</Text>
-                  <TextInput
-                    style={styles.modalFieldInput}
-                    value={newDiseaseName}
-                    onChangeText={setNewDiseaseName}
-                    placeholder="e.g. Pneumonia"
-                    placeholderTextColor="#94a3b8"
-                  />
-
-                  <Text style={[styles.modalFieldLabel, { marginTop: 12 }]}>
-                    Description (optional)
-                  </Text>
-                  <TextInput
-                    style={[styles.modalFieldInput, { height: 70 }]}
-                    value={newDiseaseDescription}
-                    onChangeText={setNewDiseaseDescription}
-                    placeholder="Brief description of the disease"
-                    placeholderTextColor="#94a3b8"
-                    multiline
-                    textAlignVertical="top"
-                  />
-
-                  <Text style={[styles.modalFieldLabel, { marginTop: 12 }]}>
-                    General Symptoms (optional)
-                  </Text>
-                  <TextInput
-                    style={[styles.modalFieldInput, { height: 70 }]}
-                    value={newDiseaseSymptoms}
-                    onChangeText={setNewDiseaseSymptoms}
-                    placeholder="e.g. Fever, cough, fatigue"
-                    placeholderTextColor="#94a3b8"
-                    multiline
-                    textAlignVertical="top"
-                  />
-
+                  <TouchableOpacity activeOpacity={1} onPress={() => openFloating("newDiseaseName")}>
+                    <TextInput
+                      style={styles.modalFieldInput}
+                      value={newDiseaseName}
+                      placeholder="e.g. Pneumonia"
+                      placeholderTextColor="#94a3b8"
+                      editable={false}
+                      pointerEvents="none"
+                    />
+                  </TouchableOpacity>
+                  <Text style={[styles.modalFieldLabel, { marginTop: 12 }]}>Description (optional)</Text>
+                  <TouchableOpacity activeOpacity={1} onPress={() => openFloating("newDiseaseDescription")}>
+                    <TextInput
+                      style={[styles.modalFieldInput, { height: 70 }]}
+                      value={newDiseaseDescription}
+                      placeholder="Brief description of the disease"
+                      placeholderTextColor="#94a3b8"
+                      multiline
+                      textAlignVertical="top"
+                      editable={false}
+                      pointerEvents="none"
+                    />
+                  </TouchableOpacity>
+                  <Text style={[styles.modalFieldLabel, { marginTop: 12 }]}>General Symptoms (optional)</Text>
+                  <TouchableOpacity activeOpacity={1} onPress={() => openFloating("newDiseaseSymptoms")}>
+                    <TextInput
+                      style={[styles.modalFieldInput, { height: 70 }]}
+                      value={newDiseaseSymptoms}
+                      placeholder="e.g. Fever, cough, fatigue"
+                      placeholderTextColor="#94a3b8"
+                      multiline
+                      textAlignVertical="top"
+                      editable={false}
+                      pointerEvents="none"
+                    />
+                  </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.modalSaveBtn, creatingDisease && { opacity: 0.6 }]}
                     onPress={handleCreateDisease}
@@ -983,40 +1166,86 @@ export default function CreatePrescriptionScreen() {
                 </>
               )}
             </ScrollView>
-
             {!showCreateDisease && (
-              <TouchableOpacity
-                style={styles.modalSaveBtn}
-                onPress={handleSaveDiagnosis}
-              >
+              <TouchableOpacity style={styles.modalSaveBtn} onPress={handleSaveDiagnosis}>
                 <Text style={styles.modalSaveBtnText}>Save Diagnosis</Text>
               </TouchableOpacity>
             )}
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* FLOATING FIELD EDITOR — shared by Chief Complaint, Notes, Medication
+          fields, Diagnosis Symptoms, and the "create new" sub-forms */}
+      <Modal
+        visible={activeField !== null}
+        transparent
+        animationType="none"
+        onRequestClose={dismissFloating}
+        onShow={() => {
+          setTimeout(() => {
+            floatingRef.current?.focus();
+          }, 100);
+        }}
+      >
+        <TouchableWithoutFeedback onPress={dismissFloating}>
+          <View style={styles.floatingBackdrop} />
+        </TouchableWithoutFeedback>
+
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.floatingModalContainer}
+        >
+          <View style={styles.floatingBar}>
+            <Text style={styles.floatingLabel}>{activeFieldConfig?.label}</Text>
+            <View
+              style={[
+                styles.floatingInputRow,
+                activeFieldConfig?.multiline && styles.floatingInputRowMultiline,
+              ]}
+            >
+              <TextInput
+                ref={floatingRef}
+                value={floatingValue}
+                onChangeText={setFloatingValue}
+                onSubmitEditing={activeFieldConfig?.multiline ? undefined : dismissFloating}
+                autoCapitalize="sentences"
+                multiline={activeFieldConfig?.multiline}
+                style={[
+                  styles.floatingDisplayText,
+                  activeFieldConfig?.multiline && styles.floatingDisplayTextMultiline,
+                ]}
+              />
+              <TouchableOpacity style={styles.floatingSubmitBtn} onPress={dismissFloating}>
+                <Text style={styles.floatingSubmitIcon}>↑</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </>
   );
 }
 
 const ModalField = ({
-  label, value, onChange, placeholder, keyboardType = "default",
+  label, value, onPress, placeholder,
 }: {
   label: string;
   value: string;
-  onChange: (v: string) => void;
+  onPress: () => void;
   placeholder: string;
-  keyboardType?: any;
 }) => (
   <View style={styles.modalFieldWrapper}>
     <Text style={styles.modalFieldLabel}>{label}</Text>
-    <TextInput
-      style={styles.modalFieldInput}
-      value={value}
-      onChange={(e) => onChange(e.nativeEvent.text)}
-      placeholder={placeholder}
-      placeholderTextColor="#94a3b8"
-      keyboardType={keyboardType}
-    />
+    <TouchableOpacity activeOpacity={1} onPress={onPress}>
+      <TextInput
+        style={styles.modalFieldInput}
+        value={value}
+        placeholder={placeholder}
+        placeholderTextColor="#94a3b8"
+        editable={false}
+        pointerEvents="none"
+      />
+    </TouchableOpacity>
   </View>
 );

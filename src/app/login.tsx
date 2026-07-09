@@ -1,3 +1,6 @@
+import { useAuth } from "@/components/context/auth-context";
+import { loginStyles as styles } from "@/styles/loginStyles";
+import { COLORS } from "@/theme";
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -15,13 +18,12 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
-import { useAuth } from "@/components/context/auth-context";
-import { COLORS } from "@/theme";
-import { loginStyles as styles } from "@/styles/loginStyles";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const emailRef = useRef("");
+  const passwordRef = useRef("");
   const [isLoading, setIsLoading] = useState(false);
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [lockoutTimeLeft, setLockoutTimeLeft] = useState(0);
@@ -70,12 +72,26 @@ export default function LoginScreen() {
       Alert.alert("Locked Out", `Please wait ${formatTime(lockoutTimeLeft)} before trying again.`);
       return;
     }
+
+    // Use refs to get guaranteed current values regardless of React render cycle
+    const currentEmail = emailRef.current.trim();
+    const currentPassword = passwordRef.current;
+
+    if (!currentEmail || !currentPassword) {
+      Alert.alert("Missing Fields", "Please enter your email and password.");
+      return;
+    }
+
     setIsLoading(true);
     try {
-      await login(email, password);
+      await login(currentEmail, currentPassword);
       setFailedAttempts(0);
       router.replace("/clinic-selection");
-    } catch {
+    } catch (error: any) {
+      const msg = error?.response?.data?.message
+        ?? error?.message
+        ?? "Unknown error";
+      Alert.alert("Error Detail", msg);
       handleFailedAttempt();
     } finally {
       setIsLoading(false);
@@ -99,8 +115,14 @@ export default function LoginScreen() {
   };
 
   const dismissFloating = () => {
-    if (activeField === "email") setEmail(floatingValue);
-    if (activeField === "password") setPassword(floatingValue);
+    if (activeField === "email") {
+      setEmail(floatingValue);
+      emailRef.current = floatingValue;
+    }
+    if (activeField === "password") {
+      setPassword(floatingValue);
+      passwordRef.current = floatingValue;
+    }
     setActiveField(null);
     Keyboard.dismiss();
   };
@@ -171,7 +193,6 @@ export default function LoginScreen() {
         animationType="none"
         onRequestClose={dismissFloating}
         onShow={() => {
-          // This forces focus specifically after the Modal is visible
           setTimeout(() => {
             floatingRef.current?.focus();
           }, 100);

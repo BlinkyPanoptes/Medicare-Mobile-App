@@ -1,5 +1,5 @@
+import { COLORS, FormStyles, SHADOWS, SIZES, SPACING } from "@/theme";
 import { StyleSheet } from "react-native";
-import { COLORS, SIZES, SPACING, SHADOWS, GlobalStyles, FormStyles } from "@/theme";
 
 export const currentQueueStyles = StyleSheet.create({
 
@@ -281,6 +281,58 @@ export const currentQueueStyles = StyleSheet.create({
     fontSize: 13,
     color: "#3f6212",
     lineHeight: 18,
+  },
+
+  // ─── Floating Field Bar (tap-to-edit bar above the keyboard) ────────────────
+
+  floatingBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "transparent",
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  floatingBar: {
+    backgroundColor: "#2a2d3a",
+    paddingHorizontal: SPACING.lg,
+    paddingTop: 14,
+    paddingBottom: 24,
+  },
+  floatingLabel: {
+    fontSize: 12,
+    color: "#94a3b8",
+    marginBottom: 8,
+  },
+  floatingInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+    borderRadius: SIZES.radius,
+    backgroundColor: "#1e2130",
+    paddingHorizontal: 14,
+    minHeight: 52,
+  },
+  floatingDisplayText: {
+    flex: 1,
+    fontSize: 16,
+    color: "#ffffff",
+    paddingVertical: 10,
+  },
+  floatingSubmitBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.primary,
+    justifyContent: "center",
+    alignItems: "center",
+    marginLeft: 10,
+  },
+  floatingSubmitIcon: {
+    color: "#ffffff",
+    fontSize: 18,
+    fontWeight: "bold",
   },
 
   // ─── Bottom Action Bar ─────────────────────────────────────────────────────

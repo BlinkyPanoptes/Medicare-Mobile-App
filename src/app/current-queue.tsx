@@ -1,16 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
-import {
-  Alert, Platform, RefreshControl, ScrollView,
-  Text, TextInput, TouchableOpacity, View,
-} from "react-native";
-import { useRouter } from "expo-router";
-import { useCallback } from "react";
-import { useAuth } from "@/components/context/auth-context";
-import { fetchQueue, addToQueue, removeFromQueue } from "@/api/queue";
-import { createPatient, updatePatient } from "@/api/patient";
 import { fetchPatientConsultations } from "@/api/consultation";
+import { createPatient, updatePatient } from "@/api/patient";
+import { addToQueue, fetchQueue, removeFromQueue } from "@/api/queue";
+import { useAuth } from "@/components/context/auth-context";
 import { currentQueueStyles as styles } from "@/styles/currentQueueStyles";
+import { calculateAge } from "@/utils/age";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { useRouter } from "expo-router";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Alert, BackHandler, Keyboard, KeyboardAvoidingView, Modal, Platform,
+  RefreshControl, ScrollView, Text, TextInput, TouchableOpacity,
+  TouchableWithoutFeedback, View,
+} from "react-native";
 
 type QueueEntry = {
   queue_id: number;
@@ -23,8 +24,18 @@ type QueueEntry = {
     birthdate: string;
     phone_number: string;
     email: string;
+    temperature?: string;
+    blood_pressure?: string;
+    height?: string;
+    weight?: string;
+    allergies?: string;
   };
 };
+
+// Keys for every text field that can be edited via the floating bar.
+type FloatingFieldKey =
+  | "search" | "lastName" | "firstName" | "height" | "weight"
+  | "temp" | "bp" | "allergies" | "email" | "mobileNumber";
 
 export default function CurrentQueueScreen() {
   const router = useRouter();
@@ -37,7 +48,6 @@ export default function CurrentQueueScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Form state
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingPatientId, setEditingPatientId] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -57,6 +67,67 @@ export default function CurrentQueueScreen() {
   const [email, setEmail] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
 
+  // ─── Floating tap-to-edit bar (mirrors LoginScreen pattern) ───────────────
+  const [activeField, setActiveField] = useState<FloatingFieldKey | null>(null);
+  const [floatingValue, setFloatingValue] = useState("");
+  const floatingRef = useRef<TextInput>(null);
+
+  // Central lookup so every field can share one Modal instead of one-per-field.
+  const fieldConfig: Record<
+    FloatingFieldKey,
+    {
+      label: string;
+      value: string;
+      setValue: (v: string) => void;
+      keyboardType?: "default" | "email-address" | "numeric" | "decimal-pad" | "number-pad";
+      autoCapitalize?: "none" | "words" | "sentences";
+      multiline?: boolean;
+    }
+  > = {
+    search: { label: "Search Queue", value: searchQuery, setValue: setSearchQuery, autoCapitalize: "none" },
+    lastName: { label: "Last Name", value: lastName, setValue: setLastName, autoCapitalize: "words" },
+    firstName: { label: "First Name", value: firstName, setValue: setFirstName, autoCapitalize: "words" },
+    height: { label: "Height (cm)", value: height, setValue: setHeight, keyboardType: "numeric" },
+    weight: { label: "Weight (kg)", value: weight, setValue: setWeight, keyboardType: "numeric" },
+    temp: { label: "Temp (°C)", value: temp, setValue: setTemp, keyboardType: "decimal-pad" },
+    bp: { label: "Blood Pressure", value: bp, setValue: setBp },
+    allergies: { label: "Allergies", value: allergies, setValue: setAllergies, multiline: true },
+    email: { label: "Patient's Email Address", value: email, setValue: setEmail, keyboardType: "email-address", autoCapitalize: "none" },
+    mobileNumber: { label: "Mobile Number (+63)", value: mobileNumber, setValue: setMobileNumber, keyboardType: "number-pad" },
+  };
+
+  const openFloating = (key: FloatingFieldKey) => {
+    setFloatingValue(fieldConfig[key].value);
+    setActiveField(key);
+  };
+
+  const dismissFloating = () => {
+    if (activeField) {
+      fieldConfig[activeField].setValue(floatingValue);
+    }
+    setActiveField(null);
+    Keyboard.dismiss();
+  };
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (activeField !== null) {
+        dismissFloating();
+        return true;
+      }
+      return false;
+    });
+    return () => subscription.remove();
+  }, [activeField, floatingValue]);
+
+  useEffect(() => {
+    const sub = Keyboard.addListener("keyboardDidHide", () => {
+      if (activeField !== null) dismissFloating();
+    });
+    return () => sub.remove();
+  }, [activeField, floatingValue]);
+  // ────────────────────────────────────────────────────────────────────────
+
   const loadQueue = async (showRefresh = false) => {
     if (showRefresh) setIsRefreshing(true);
     try {
@@ -64,7 +135,6 @@ export default function CurrentQueueScreen() {
       const entries: QueueEntry[] = res.data.data ?? [];
       setQueue(entries);
 
-      // Batch-check consultation history to determine new/old status
       const statusEntries = await Promise.all(
         entries.map(async (entry) => {
           try {
@@ -124,8 +194,12 @@ export default function CurrentQueueScreen() {
     setBirthdate(p.birthdate ?? "");
     const parsed = Date.parse(p.birthdate);
     setDateValue(!isNaN(parsed) ? new Date(parsed) : new Date());
-    setCivilStatus("Single"); setHeight(""); setWeight("");
-    setTemp(""); setBp(""); setAllergies("");
+    setCivilStatus("Single");
+    setHeight(p.height ?? "");
+    setWeight(p.weight ?? "");
+    setTemp(p.temperature ?? "");
+    setBp(p.blood_pressure ?? "");
+    setAllergies(p.allergies ?? "");
     setEmail(p.email ?? "");
     setMobileNumber(p.phone_number ?? "");
     setShowAddForm(true);
@@ -168,13 +242,11 @@ export default function CurrentQueueScreen() {
 
     try {
       if (editingPatientId) {
-        // Edit existing patient — update only, no re-queue
         await updatePatient(editingPatientId, payload);
         setShowAddForm(false);
         await loadQueue();
         Alert.alert("Updated", `Patient record for ${firstName} ${lastName} has been updated.`);
       } else {
-        // New patient — create then add to queue
         const response = await createPatient(payload);
         const newPatient = response.data.patient;
         await addToQueue(newPatient.id);
@@ -182,8 +254,6 @@ export default function CurrentQueueScreen() {
         await loadQueue();
 
         if (isDoctor) {
-          // Doctor goes straight to prescription
-          // Re-fetch queue to get the queue_id for the newly added patient
           const freshQueue = await fetchQueue();
           const freshEntries: QueueEntry[] = freshQueue.data.data ?? [];
           const matchedEntry = freshEntries.find((e) => e.patient.id === newPatient.id);
@@ -194,11 +264,15 @@ export default function CurrentQueueScreen() {
               patientName: `${newPatient.last_name}, ${newPatient.first_name}`,
               patientGender: newPatient.gender,
               patientBirthdate: newPatient.birthdate,
+              patientTemperature: newPatient.temperature ?? "",
+              patientBloodPressure: newPatient.blood_pressure ?? "",
+              patientHeight: newPatient.height ?? "",
+              patientWeight: newPatient.weight ?? "",
+              patientAllergies: newPatient.allergies ?? "",
               queueId: matchedEntry ? matchedEntry.queue_id.toString() : "",
             },
           });
         } else {
-          // Assistant stays in queue
           Alert.alert("Success", `${firstName} ${lastName} has been added to the queue.`);
         }
       }
@@ -235,7 +309,7 @@ export default function CurrentQueueScreen() {
   };
 
   const handleCardPress = (entry: QueueEntry) => {
-    if (!isDoctor) return; // Assistants cannot start a prescription
+    if (!isDoctor) return;
     router.push({
       pathname: "/consultations/createPrescription",
       params: {
@@ -243,10 +317,87 @@ export default function CurrentQueueScreen() {
         patientName: `${entry.patient.last_name}, ${entry.patient.first_name}`,
         patientGender: entry.patient.gender,
         patientBirthdate: entry.patient.birthdate,
+        patientTemperature: entry.patient.temperature ?? "",
+        patientBloodPressure: entry.patient.blood_pressure ?? "",
+        patientHeight: entry.patient.height ?? "",
+        patientWeight: entry.patient.weight ?? "",
+        patientAllergies: entry.patient.allergies ?? "",
         queueId: entry.queue_id.toString(),
       },
     });
   };
+
+  // Shared floating bar Modal — rendered once, used by every editable field
+  // across both the form view and the list view (search bar).
+  const renderFloatingBarModal = () => (
+    <Modal
+      visible={activeField !== null}
+      transparent
+      animationType="none"
+      onRequestClose={dismissFloating}
+      onShow={() => {
+        setTimeout(() => {
+          floatingRef.current?.focus();
+        }, 100);
+      }}
+    >
+      <TouchableWithoutFeedback onPress={dismissFloating}>
+        <View style={styles.floatingBackdrop} />
+      </TouchableWithoutFeedback>
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.modalContainer}
+      >
+        <View style={styles.floatingBar}>
+          <Text style={styles.floatingLabel}>
+            {activeField ? fieldConfig[activeField].label : ""}
+          </Text>
+          <View
+            style={[
+              styles.floatingInputRow,
+              activeField && fieldConfig[activeField].multiline
+                ? { minHeight: 90, alignItems: "flex-start", paddingVertical: 10 }
+                : null,
+            ]}
+          >
+            <TextInput
+              ref={floatingRef}
+              value={floatingValue}
+              onChangeText={setFloatingValue}
+              onSubmitEditing={activeField && fieldConfig[activeField].multiline ? undefined : dismissFloating}
+              autoCapitalize={activeField ? fieldConfig[activeField].autoCapitalize ?? "sentences" : "sentences"}
+              keyboardType={activeField ? fieldConfig[activeField].keyboardType ?? "default" : "default"}
+              multiline={activeField ? fieldConfig[activeField].multiline : false}
+              style={styles.floatingDisplayText}
+            />
+            <TouchableOpacity style={styles.floatingSubmitBtn} onPress={dismissFloating}>
+              <Text style={styles.floatingSubmitIcon}>↑</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+
+  // Small helper so every "tap to edit" field looks/behaves the same way.
+  const renderTapField = (
+    key: FloatingFieldKey,
+    inputStyle: any,
+    placeholder: string
+  ) => (
+    <TouchableOpacity activeOpacity={1} onPress={() => openFloating(key)} style={{ flex: 1 }}>
+      <TextInput
+        style={inputStyle}
+        value={fieldConfig[key].value}
+        placeholder={placeholder}
+        placeholderTextColor="#94a3b8"
+        editable={false}
+        pointerEvents="none"
+        multiline={fieldConfig[key].multiline}
+      />
+    </TouchableOpacity>
+  );
 
   // ─── VIEW: Add / Edit Patient Form ───────────────────────────────────────
   if (showAddForm) {
@@ -265,13 +416,7 @@ export default function CurrentQueueScreen() {
           <View style={styles.fieldWrapper}>
             <Text style={styles.fieldLabelText}>Last Name</Text>
             <View style={styles.inputContainerRow}>
-              <TextInput
-                style={styles.fieldInput}
-                value={lastName}
-                onChangeText={setLastName}
-                placeholder="Enter last name"
-                placeholderTextColor="#94a3b8"
-              />
+              {renderTapField("lastName", styles.fieldInput, "Enter last name")}
               {lastName.length > 0 && (
                 <TouchableOpacity onPress={() => setLastName("")} style={styles.clearBtnClick}>
                   <Text style={styles.clearBtnSymbol}>×</Text>
@@ -284,13 +429,7 @@ export default function CurrentQueueScreen() {
           <View style={styles.fieldWrapper}>
             <Text style={styles.fieldLabelText}>First Name</Text>
             <View style={styles.inputContainerRow}>
-              <TextInput
-                style={styles.fieldInput}
-                value={firstName}
-                onChangeText={setFirstName}
-                placeholder="Enter first name"
-                placeholderTextColor="#94a3b8"
-              />
+              {renderTapField("firstName", styles.fieldInput, "Enter first name")}
               {firstName.length > 0 && (
                 <TouchableOpacity onPress={() => setFirstName("")} style={styles.clearBtnClick}>
                   <Text style={styles.clearBtnSymbol}>×</Text>
@@ -318,7 +457,7 @@ export default function CurrentQueueScreen() {
             </View>
           </View>
 
-          {/* Birthdate */}
+          {/* Birthdate (unchanged — uses native date picker, not the keyboard) */}
           <View style={styles.fieldWrapper}>
             <Text style={styles.fieldLabelText}>Birthdate</Text>
             <TouchableOpacity style={styles.inputContainerRow} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
@@ -343,6 +482,21 @@ export default function CurrentQueueScreen() {
               maximumDate={new Date()}
             />
           )}
+
+          {/* Age — auto calculated */}
+          {birthdate ? (
+            <View style={styles.fieldWrapper}>
+              <Text style={styles.fieldLabelText}>Age</Text>
+              <View style={[styles.inputContainerRow, { backgroundColor: "#f8fafc" }]}>
+                <TextInput
+                  style={[styles.fieldInput, { color: "#64748b" }]}
+                  value={`${calculateAge(birthdate)} years old`}
+                  editable={false}
+                  pointerEvents="none"
+                />
+              </View>
+            </View>
+          ) : null}
 
           {/* Civil Status */}
           <View style={styles.fieldWrapper}>
@@ -372,27 +526,13 @@ export default function CurrentQueueScreen() {
             <View style={[styles.fieldWrapper, { flex: 1 }]}>
               <Text style={styles.fieldLabelText}>Height (cm)</Text>
               <View style={styles.inputContainerRow}>
-                <TextInput
-                  style={styles.fieldInput}
-                  value={height}
-                  onChangeText={setHeight}
-                  keyboardType="numeric"
-                  placeholder="e.g. 170"
-                  placeholderTextColor="#94a3b8"
-                />
+                {renderTapField("height", styles.fieldInput, "e.g. 170")}
               </View>
             </View>
             <View style={[styles.fieldWrapper, { flex: 1 }]}>
               <Text style={styles.fieldLabelText}>Weight (kg)</Text>
               <View style={styles.inputContainerRow}>
-                <TextInput
-                  style={styles.fieldInput}
-                  value={weight}
-                  onChangeText={setWeight}
-                  keyboardType="numeric"
-                  placeholder="e.g. 70"
-                  placeholderTextColor="#94a3b8"
-                />
+                {renderTapField("weight", styles.fieldInput, "e.g. 70")}
               </View>
             </View>
           </View>
@@ -402,26 +542,13 @@ export default function CurrentQueueScreen() {
             <View style={[styles.fieldWrapper, { flex: 1 }]}>
               <Text style={styles.fieldLabelText}>Temp (°C)</Text>
               <View style={styles.inputContainerRow}>
-                <TextInput
-                  style={styles.fieldInput}
-                  value={temp}
-                  onChangeText={setTemp}
-                  keyboardType="decimal-pad"
-                  placeholder="36.5"
-                  placeholderTextColor="#94a3b8"
-                />
+                {renderTapField("temp", styles.fieldInput, "36.5")}
               </View>
             </View>
             <View style={[styles.fieldWrapper, { flex: 1 }]}>
               <Text style={styles.fieldLabelText}>Blood Pressure</Text>
               <View style={styles.inputContainerRow}>
-                <TextInput
-                  style={styles.fieldInput}
-                  value={bp}
-                  onChangeText={setBp}
-                  placeholder="120/80"
-                  placeholderTextColor="#94a3b8"
-                />
+                {renderTapField("bp", styles.fieldInput, "120/80")}
               </View>
             </View>
           </View>
@@ -429,8 +556,9 @@ export default function CurrentQueueScreen() {
           {/* Allergies */}
           <View style={styles.fieldWrapper}>
             <Text style={styles.fieldLabelText}>Allergies</Text>
-            <TextInput
-              style={[styles.fieldInput, {
+            {renderTapField(
+              "allergies",
+              [styles.fieldInput, {
                 height: 80,
                 textAlignVertical: "top",
                 paddingTop: 10,
@@ -438,29 +566,16 @@ export default function CurrentQueueScreen() {
                 borderWidth: 1,
                 borderColor: "#e2e8f0",
                 borderRadius: 10,
-              }]}
-              value={allergies}
-              onChangeText={setAllergies}
-              placeholder="List any allergies or type 'None'..."
-              placeholderTextColor="#94a3b8"
-              multiline={true}
-              numberOfLines={4}
-            />
+              }],
+              "List any allergies or type 'None'..."
+            )}
           </View>
 
           {/* Email */}
           <View style={styles.fieldWrapper}>
             <Text style={styles.fieldLabelText}>Patient's Email Address</Text>
             <View style={styles.inputContainerRow}>
-              <TextInput
-                style={styles.fieldInput}
-                value={email}
-                onChangeText={setEmail}
-                placeholder="example@email.com"
-                placeholderTextColor="#94a3b8"
-                autoCapitalize="none"
-                keyboardType="email-address"
-              />
+              {renderTapField("email", styles.fieldInput, "example@email.com")}
             </View>
           </View>
 
@@ -471,14 +586,7 @@ export default function CurrentQueueScreen() {
               <View style={styles.countryCodeBadgePlate}>
                 <Text style={styles.countryCodeBadgeLabel}>+63</Text>
               </View>
-              <TextInput
-                style={[styles.fieldInput, styles.phoneNumberNativeInput]}
-                value={mobileNumber}
-                onChangeText={setMobileNumber}
-                placeholder="917 123 4567"
-                placeholderTextColor="#94a3b8"
-                keyboardType="number-pad"
-              />
+              {renderTapField("mobileNumber", [styles.fieldInput, styles.phoneNumberNativeInput], "917 123 4567")}
             </View>
           </View>
 
@@ -496,15 +604,7 @@ export default function CurrentQueueScreen() {
           </View>
         </ScrollView>
 
-        {/* Bottom Action Bar */}
         <View style={styles.bottomActionBarWrapper}>
-          <TouchableOpacity
-            style={styles.cancelBtn}
-            onPress={() => setShowAddForm(false)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.cancelBtnText}>Cancel</Text>
-          </TouchableOpacity>
           <TouchableOpacity
             style={[styles.nextActionButtonCall, isSubmitting && { backgroundColor: "#82b27a" }]}
             onPress={handleSaveAndAddToQueue}
@@ -520,6 +620,8 @@ export default function CurrentQueueScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+
+        {renderFloatingBarModal()}
       </View>
     );
   }
@@ -541,13 +643,7 @@ export default function CurrentQueueScreen() {
       >
         {/* Search */}
         <View style={styles.searchBarWrapper}>
-          <TextInput
-            style={styles.searchBarInput}
-            placeholder="Search queue by name..."
-            placeholderTextColor="#94a3b8"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
+          {renderTapField("search", styles.searchBarInput, "Search queue by name...")}
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery("")} style={styles.clearBtnClick}>
               <Text style={styles.clearBtnSymbol}>×</Text>
@@ -612,6 +708,7 @@ export default function CurrentQueueScreen() {
                     ? entry.patient.gender.charAt(0).toUpperCase() + entry.patient.gender.slice(1)
                     : "—"}{" "}
                   • DOB: {entry.patient.birthdate}
+                  {entry.patient.birthdate ? ` • Age: ${calculateAge(entry.patient.birthdate)}` : ""}
                 </Text>
                 {entry.patient.phone_number ? (
                   <Text style={styles.cardSubDetails}>📱 +63 {entry.patient.phone_number}</Text>
@@ -645,6 +742,8 @@ export default function CurrentQueueScreen() {
           ))
         )}
       </ScrollView>
+
+      {renderFloatingBarModal()}
     </View>
   );
 }

@@ -1,49 +1,32 @@
+import { fetchPatientConsultations } from "@/api/consultation";
+import { fetchPatients } from "@/api/patient";
 import { useAuth } from "@/components/context/auth-context";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { medicalCertStyles as styles } from "@/styles/MedicalcertStyles";
 import * as MailComposer from "expo-mail-composer";
 import * as Print from "expo-print";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
-  FlatList,
-  Modal,
-  Platform,
+  RefreshControl,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 
-import { MedicalCertificate } from "@/types/medical-certificate";
-import { Patient } from "@/types/patient";
-
-import { MOCK_MEDICAL_CERTIFICATES, MOCK_PATIENTS, MOCK_USER } from "@/mocks";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-const testPatients = MOCK_PATIENTS;
-const testUser = MOCK_USER;
-const testMedicalCertificates = MOCK_MEDICAL_CERTIFICATES;
-const testClinic = testUser.clinic;
+type Patient = {
+  id: number;
+  first_name: string;
+  last_name: string;
+  gender: string;
+  birthdate: string;
+};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-const generateCertificateId = () =>
-  Math.random().toString(36).substring(2, 18).toUpperCase();
-
-const calculateAge = (birthdate: Date): number => {
-  const today = new Date();
-  let age = today.getFullYear() - birthdate.getFullYear();
-  const monthDiff = today.getMonth() - birthdate.getMonth();
-  if (
-    monthDiff < 0 ||
-    (monthDiff === 0 && today.getDate() < birthdate.getDate())
-  ) {
-    age--;
-  }
-  return age;
-};
 
 const formatDisplayDate = (date: Date) =>
   date.toLocaleDateString("en-US", {
@@ -52,32 +35,18 @@ const formatDisplayDate = (date: Date) =>
     year: "numeric",
   });
 
-const formatIssuedDateTime = (date: Date) => {
-  const d = date.toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-  const t = date.toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-    timeZoneName: "short",
-  });
-  return `${d}\n${t}`;
-};
-
 // ── PDF HTML Generator ────────────────────────────────────────────────────────
+// Blank fill-in-the-blank template — the doctor handwrites the clinical content
+// after printing. Only the patient's name, doctor/clinic letterhead, and
+// today's date are pre-filled from data we already have.
 
 const generateMedicalCertificateHTML = (
-  cert: MedicalCertificate,
+  patientFullName: string,
   doctorName: string,
-  specialty: string,
+  prcNumber: string,
   clinicName: string,
   clinicAddress: string,
   clinicContact: string,
-  prcNumber: string,
   issuedAt: Date,
 ): string => `
 <!DOCTYPE html>
@@ -86,125 +55,107 @@ const generateMedicalCertificateHTML = (
   <meta charset="UTF-8" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    @page { size: letter portrait; margin: 1in; }
     body {
       font-family: 'Times New Roman', Times, serif;
       font-size: 12pt;
       color: #000;
-      padding: 40px 50px;
-      max-width: 700px;
-      margin: 0 auto;
     }
     .header {
       text-align: center;
-      border-bottom: 2px solid #000;
-      padding-bottom: 16px;
-      margin-bottom: 16px;
+      border-bottom: 2px double #000;
+      padding-bottom: 8px;
+      margin-bottom: 14px;
     }
-    .clinic-name { font-size: 16pt; font-weight: bold; letter-spacing: 0.5px; }
-    .clinic-sub { font-size: 10pt; margin-top: 2px; color: #333; }
-    .doctor-name { font-size: 14pt; font-weight: bold; margin-top: 10px; }
-    .doctor-specialty { font-size: 10pt; font-style: italic; color: #444; }
-    .cert-meta {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 20px;
-      font-size: 10pt;
-      color: #444;
+    .doctor-name { font-size: 18pt; font-weight: bold; margin-bottom: 2px; }
+    .clinic-info { font-size: 9pt; line-height: 1.3; margin-top: 4px; }
+    .date-row { text-align: right; font-size: 12pt; margin-bottom: 18px; }
+    .date-line {
+      display: inline-block;
+      border-bottom: 1px solid #000;
+      min-width: 160px;
+      padding-bottom: 2px;
+      margin-left: 6px;
     }
-    .cert-id { font-size: 9pt; color: #666; }
-    .cert-date { text-align: right; white-space: pre-line; font-size: 10pt; }
     .title {
       text-align: center;
-      font-size: 16pt;
+      font-size: 22pt;
       font-weight: bold;
-      letter-spacing: 2px;
-      text-decoration: underline;
-      margin: 20px 0 24px 0;
+      margin-bottom: 18px;
     }
-    .patient-block { margin-bottom: 20px; }
-    .patient-line { font-size: 11pt; margin-bottom: 4px; }
-    .patient-line span { font-weight: bold; }
-    .section { margin-bottom: 18px; }
-    .section-label { font-size: 12pt; font-weight: bold; margin-bottom: 6px; }
-    .section-content { font-size: 11pt; line-height: 1.6; padding-left: 8px; }
-    .disclaimer {
-      text-align: center;
-      font-size: 10pt;
-      color: #444;
-      margin: 28px 0 32px 0;
-      font-style: italic;
+    .salutation { font-size: 12pt; margin-bottom: 14px; }
+    .fill {
+      display: inline-block;
+      border-bottom: 1px solid #000;
+      padding: 0 4px;
     }
-    .signature-block { margin-top: 40px; text-align: center; }
-    .signature-line {
-      width: 220px;
-      border-top: 1.5px solid #000;
-      margin: 0 auto 6px auto;
+    .cert-para { font-size: 12pt; line-height: 1.9; }
+    .cert-para .indent { padding-left: 24px; }
+    .fill-name { min-width: 220px; }
+    .fill-full { display: block; width: 100%; margin-bottom: 2px; }
+    .fill-date { min-width: 180px; }
+    .diagnosis-row { font-size: 12pt; line-height: 1.6; margin-top: 6px; }
+    .diagnosis-row .fill-inline { min-width: 260px; }
+    .blank-full {
+      display: block;
+      border-bottom: 1px solid #000;
+      height: 24px;
     }
-    .signature-name { font-size: 12pt; font-weight: bold; }
-    .signature-prc { font-size: 10pt; color: #444; }
-    .footer-note {
-      margin-top: 36px;
-      border-top: 1px solid #ccc;
-      padding-top: 10px;
-      font-size: 8.5pt;
-      color: #555;
-      line-height: 1.5;
-    }
-    .end-tag {
-      text-align: center;
-      font-size: 9pt;
-      color: #666;
-      margin-top: 16px;
-      font-style: italic;
-    }
+    .recommendation-row { font-size: 12pt; line-height: 1.6; margin-top: 10px; }
+    .recommendation-row .fill-inline { min-width: 300px; }
+    .closing { font-size: 12pt; margin-top: 16px; line-height: 1.6; }
+    .signature-block { margin-top: 30px; text-align: right; }
+    .signature-name { font-size: 12pt; font-weight: bold; text-align: right; }
+    .signature-lic { font-size: 10pt; text-align: right; }
   </style>
 </head>
 <body>
   <div class="header">
-    <div class="clinic-name">${testUser?.clinic?.name}</div>
-    <div class="clinic-sub">${testUser?.clinic?.address}</div>
-    <div class="clinic-sub">Tel No.: ${testUser?.clinic?.contactNumber}</div>
-    <div class="doctor-name">${testUser?.firstName} ${testUser?.lastName}</div>
-    <div class="doctor-specialty">${testUser?.specialty}</div>
+    <div class="doctor-name">${doctorName}</div>
+    <div class="clinic-info">
+      <div><strong>${clinicName}</strong></div>
+      ${clinicAddress ? `<div>${clinicAddress}</div>` : ""}
+      ${clinicContact ? `<div>Tel No.: ${clinicContact}</div>` : ""}
+    </div>
   </div>
-  <div class="cert-meta">
-    <div class="cert-id">MEDICAL CERTIFICATE ID: ${cert.id}</div>
-    <div class="cert-date">${formatIssuedDateTime(issuedAt)}</div>
+
+  <div class="date-row">Date: <span class="date-line">${formatDisplayDate(issuedAt)}</span></div>
+
+  <div class="title">Medical Certificate</div>
+
+  <div class="salutation">To whom it may concern,</div>
+
+  <div class="cert-para">
+    <span class="indent">This is to certify that</span>
+    <span class="fill fill-name">${patientFullName}</span> of
+    <span class="fill fill-full">&nbsp;</span>
+    has consulted me on <span class="fill fill-date">&nbsp;</span>
   </div>
-  <div class="title">MEDICAL CERTIFICATE</div>
-  <div class="patient-block">
-    <div class="patient-line"><span>Patient:</span> ${cert.patient.lastName}, ${cert.patient.firstName}</div>
-    <div class="patient-line"><span>Age:</span> ${calculateAge(cert.patient.birthdate)} years old</div>
-    <div class="patient-line"><span>Gender:</span> ${cert.patient.gender}</div>
+
+  <div class="diagnosis-row">
+    with the following diagnosis<span class="fill fill-inline">&nbsp;</span>
   </div>
-  <div class="section">
-    <div class="section-label">Complaints:</div>
-    <div class="section-content">${cert.complaints}</div>
+  <div class="blank-full"></div>
+  <div class="blank-full"></div>
+  <div class="blank-full"></div>
+  <div class="blank-full"></div>
+
+  <div class="recommendation-row">
+    Recommendation (s):<span class="fill fill-inline">&nbsp;</span>
   </div>
-  <div class="section">
-    <div class="section-label">Diagnosis:</div>
-    <div class="section-content">${cert.diagnosis}</div>
+  <div class="blank-full"></div>
+  <div class="blank-full"></div>
+
+  <div class="closing">
+    This certificate is issued upon the request of the patient.<br />
+    Thank you.
   </div>
-  <div class="section">
-    <div class="section-label">Recommendation:</div>
-    <div class="section-content">${cert.recommendation}</div>
-  </div>
-  <div class="disclaimer">
-    This certificate is issued upon the request of the above patient for whatever purpose it may serve,
-    except for medico-legal reasons.
-  </div>
+
   <div class="signature-block">
-    <div class="signature-line"></div>
-    <div class="signature-name">${testUser.firstName} ${testUser.lastName}</div>
-    <div class="signature-prc">PRC No.: ${testUser.prcNumber}</div>
+    <div class="signature-name">${doctorName}</div>
+    <div class="signature-lic">Lic No.: ${prcNumber || "____________"}</div>
+    <div class="signature-lic">PTR No.: ____________</div>
   </div>
-  <div class="footer-note">
-    <strong>Note to User:</strong> The information contained in this medical certificate is confidential
-    and intended solely for the named patient. Unauthorized reproduction or alteration of this document
-    is strictly prohibited and may be subject to legal action.
-  </div>
-  <div class="end-tag">(End of Medical Certificate)</div>
 </body>
 </html>
 `;
@@ -212,830 +163,238 @@ const generateMedicalCertificateHTML = (
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function MedicalCertificateScreen() {
-  const { user } = useAuth();
+  const { user, activeClinic } = useAuth();
 
-  const [isCreating, setIsCreating] = useState(false);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [loadingPatientId, setLoadingPatientId] = useState<number | null>(null);
 
-  // Patient picker modal
-  const [showPatientPicker, setShowPatientPicker] = useState(false);
-  const [patientSearch, setPatientSearch] = useState("");
+  const isDoctor = user?.role === "doctor";
 
-  // Patient info fields
-  const [patientLastName, setPatientLastName] = useState("");
-  const [patientFirstName, setPatientFirstName] = useState("");
-  const [patientGender, setPatientGender] = useState<"Male" | "Female">(
-    "Female",
-  );
-
-  // Single source of truth for birthdate — always a Date | null
-  const [birthdateObj, setBirthdateObj] = useState<Date | null>(null);
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [dateValue, setDateValue] = useState(new Date());
-
-  // Derived display string — never stored separately
-  const birthdateDisplay = birthdateObj ? formatDisplayDate(birthdateObj) : "";
-
-  // Certificate fields
-  const [complaints, setComplaints] = useState("");
-  const [diagnosis, setDiagnosis] = useState("");
-  const [recommendation, setRecommendation] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Issued certificates history
-  const [certificates, setCertificates] = useState<MedicalCertificate[]>(
-    testMedicalCertificates,
-  );
-
-  // ── Patient search filter (useMemo) ─────────────────────────────────────────
-  const filteredPatients = useMemo(() => {
-    const query = patientSearch.trim().toLowerCase();
-    if (!query) return testPatients;
-    return testPatients.filter(
-      (p) =>
-        p.lastName.toLowerCase().includes(query) ||
-        p.firstName.toLowerCase().includes(query),
-    );
-  }, [patientSearch]);
-
-  // ── Autofill from selected patient ─────────────────────────────────────────
-  const handleSelectPatient = (patient: Patient) => {
-    setPatientLastName(patient.lastName);
-    setPatientFirstName(patient.firstName);
-    setPatientGender(patient.gender as "Male" | "Female");
-    setBirthdateObj(patient.birthdate); // already a Date
-    setDateValue(patient.birthdate); // already a Date
-    setShowPatientPicker(false);
-    setPatientSearch("");
-  };
-
-  // ── Date picker ─────────────────────────────────────────────────────────────
-  const onDateChange = (event: any, selectedDate?: Date) => {
-    if (Platform.OS === "android") setShowDatePicker(false);
-    if (selectedDate) {
-      setBirthdateObj(selectedDate);
-      setDateValue(selectedDate);
-    }
-  };
-
-  // ── Reset form ──────────────────────────────────────────────────────────────
-  const openCreateForm = () => {
-    setPatientLastName("");
-    setPatientFirstName("");
-    setPatientGender("Female");
-    setBirthdateObj(null);
-    setDateValue(new Date());
-    setComplaints("");
-    setDiagnosis("");
-    setRecommendation("");
-    setIsCreating(true);
-  };
-
-  // ── Export PDF ──────────────────────────────────────────────────────────────
-  const handleExportPDF = async (cert: MedicalCertificate) => {
-    const doctorName = user
-      ? `${user.firstName} ${user.lastName}, MD`
-      : "Physician";
-    const specialty = user?.specialty ?? "General Practice";
-    const clinicName = user?.clinic?.name ?? "CraveCare Clinic";
-    const clinicAddress = user?.clinic?.address ?? "";
-    const clinicContact = user?.clinic?.contactNumber ?? "";
-    const prcNumber = user?.prcNumber ?? "N/A";
-    const issuedAt = new Date();
-
-    const html = generateMedicalCertificateHTML(
-      cert,
-      doctorName,
-      specialty,
-      clinicName,
-      clinicAddress,
-      clinicContact,
-      prcNumber,
-      issuedAt,
-    );
-
-    Alert.alert(
-      "Export Medical Certificate",
-      "Choose how to export this certificate.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "📤 Share / Print",
-          onPress: async () => {
-            try {
-              await Print.printAsync({ html });
-            } catch (err: any) {
-              Alert.alert("Print Failed", err?.message ?? JSON.stringify(err));
-            }
-          },
-        },
-        {
-          text: "📧 Send via Email",
-          onPress: async () => {
-            try {
-              const { uri } = await Print.printToFileAsync({ html });
-              const isAvailable = await MailComposer.isAvailableAsync();
-              if (!isAvailable) {
-                Alert.alert(
-                  "Email Unavailable",
-                  "No email client is configured on this device.",
-                );
-                return;
-              }
-              await MailComposer.composeAsync({
-                subject: `Medical Certificate — ${cert.patient.firstName} ${cert.patient.lastName}`,
-                body: `Please find attached the medical certificate for ${cert.patient.firstName} ${cert.patient.lastName}.`,
-                attachments: [uri],
-              });
-            } catch (err) {
-              Alert.alert("Email Failed", "Could not open email composer.");
-            }
-          },
-        },
-      ],
-    );
-  };
-
-  // ── Issue certificate ───────────────────────────────────────────────────────
-  const handleIssue = async () => {
-    if (
-      !patientLastName.trim() ||
-      !patientFirstName.trim() ||
-      !birthdateObj || // check the Date object, not a string
-      !complaints.trim() ||
-      !diagnosis.trim() ||
-      !recommendation.trim()
-    ) {
-      Alert.alert(
-        "Missing Fields",
-        "Please complete all fields before issuing.",
-      );
-      return;
-    }
-
-    setIsSubmitting(true);
-
+  const loadPatients = async (showRefresh = false) => {
+    if (showRefresh) setIsRefreshing(true);
+    else setIsLoading(true);
     try {
-      const age = calculateAge(birthdateObj);
+      const res = await fetchPatients();
+      const allPatients: Patient[] = res.data.data ?? res.data;
 
-      const newCert: MedicalCertificate = {
-        id: generateCertificateId(),
-        type: "medical-certificate",
-        createdBy: testUser,
-        dateIssued: new Date(),
-        patient: {
-          id: generateCertificateId(),
-          createdBy: testUser,
-          firstName: patientFirstName.trim(),
-          lastName: patientLastName.trim(),
-          gender: patientGender,
-          birthdate: birthdateObj,
-          email: "",
-          phoneNumber: "",
-          clinic: testClinic!,
-        },
-        complaints,
-        diagnosis,
-        recommendation,
-      };
+      // Only patients with at least one consultation on record
+      const consultationChecks = await Promise.all(
+        allPatients.map(async (p) => {
+          try {
+            const cRes = await fetchPatientConsultations(p.id);
+            const consultations = cRes.data.data ?? [];
+            return consultations.length > 0 ? p : null;
+          } catch {
+            return null;
+          }
+        }),
+      );
 
-      setCertificates((prev) => [newCert, ...prev]);
+      const withConsultations = consultationChecks.filter(
+        (p): p is Patient => p !== null,
+      );
+
+      // Alphabetical by last name, then first name
+      withConsultations.sort((a, b) => {
+        const lastCompare = a.last_name.localeCompare(b.last_name);
+        if (lastCompare !== 0) return lastCompare;
+        return a.first_name.localeCompare(b.first_name);
+      });
+
+      setPatients(withConsultations);
+    } catch {
+      Alert.alert("Error", "Could not load patients.");
+    } finally {
+      if (showRefresh) setIsRefreshing(false);
+      else setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isDoctor) loadPatients();
+  }, [isDoctor]);
+
+  const filteredPatients = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return patients;
+    return patients.filter(
+      (p) =>
+        p.first_name.toLowerCase().includes(q) ||
+        p.last_name.toLowerCase().includes(q),
+    );
+  }, [patients, searchQuery]);
+
+  // ── Generate + present print/share/email options ──────────────────────────
+  const handleSelectPatient = async (patient: Patient) => {
+    setLoadingPatientId(patient.id);
+    try {
+      const doctorName = user ? `${user.first_name} ${user.last_name}, M.D.` : "Physician";
+      const prcNumber = user?.prc_id ?? "";
+      const clinicName = activeClinic?.clinic_name ?? "Clinic";
+      const clinicAddress = activeClinic?.address ?? "";
+      const clinicContact = activeClinic?.phone_number ?? "";
+      const patientFullName = `${patient.first_name} ${patient.last_name}`;
+      const issuedAt = new Date();
+
+      const html = generateMedicalCertificateHTML(
+        patientFullName,
+        doctorName,
+        prcNumber,
+        clinicName,
+        clinicAddress,
+        clinicContact,
+        issuedAt,
+      );
 
       Alert.alert(
-        "Certificate Issued",
-        `Medical certificate for ${newCert.patient.firstName} ${newCert.patient.lastName} has been issued.`,
+        "Medical Certificate",
+        `Generate a blank medical certificate for ${patientFullName}?`,
         [
+          { text: "Cancel", style: "cancel" },
           {
-            text: "Export PDF",
-            onPress: () => {
-              setIsCreating(false);
-              handleExportPDF(newCert);
+            text: "📤 Share / Print",
+            onPress: async () => {
+              try {
+                await Print.printAsync({ html });
+              } catch (err: any) {
+                Alert.alert("Print Failed", err?.message ?? "Something went wrong.");
+              }
             },
           },
-          { text: "Done", onPress: () => setIsCreating(false) },
+          {
+            text: "📧 Send via Email",
+            onPress: async () => {
+              try {
+                const { uri } = await Print.printToFileAsync({ html });
+                const isAvailable = await MailComposer.isAvailableAsync();
+                if (!isAvailable) {
+                  Alert.alert(
+                    "Email Unavailable",
+                    "No email client is configured on this device.",
+                  );
+                  return;
+                }
+                await MailComposer.composeAsync({
+                  subject: `Medical Certificate — ${patientFullName}`,
+                  body: `Please find attached the medical certificate for ${patientFullName}.`,
+                  attachments: [uri],
+                });
+              } catch {
+                Alert.alert("Email Failed", "Could not open email composer.");
+              }
+            },
+          },
         ],
       );
-    } catch (err) {
-      Alert.alert("Error", "Could not issue the certificate.");
+    } catch {
+      Alert.alert("Error", "Could not generate the certificate.");
     } finally {
-      setIsSubmitting(false);
+      setLoadingPatientId(null);
     }
   };
 
-  // ── VIEW 1: Certificate History List ───────────────────────────────────────
-  if (!isCreating) {
+  // ── Guard: doctors only ─────────────────────────────────────────────────────
+  if (!isDoctor) {
     return (
       <View style={styles.container}>
-        <ScrollView
-          style={styles.scroller}
-          contentContainerStyle={styles.content}
-        >
-          <View style={styles.listHeaderRow}>
-            <Text style={styles.promptHeadline}>Medical Certificates</Text>
-            <TouchableOpacity style={styles.addBtn} onPress={openCreateForm}>
-              <Text style={styles.addBtnText}>+ Issue New</Text>
-            </TouchableOpacity>
-          </View>
-
-          {certificates.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyIcon}>📄</Text>
-              <Text style={styles.emptyText}>No certificates issued yet.</Text>
-              <Text style={styles.emptySubtext}>
-                Tap "+ Issue New" to create a medical certificate.
-              </Text>
-            </View>
-          ) : (
-            certificates.map((cert) => (
-              <View key={cert.id} style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <Text style={styles.cardName}>
-                    {cert.patient.lastName}, {cert.patient.firstName}
-                  </Text>
-                  <Text style={styles.cardDate}>
-                    {formatDisplayDate(new Date(cert.dateIssued))}
-                  </Text>
-                </View>
-                <Text style={styles.cardDetail} numberOfLines={1}>
-                  🩺 {cert.diagnosis}
-                </Text>
-                <Text style={styles.cardDetail} numberOfLines={1}>
-                  📋 {cert.recommendation}
-                </Text>
-                <Text style={styles.cardId}>ID: {cert.id}</Text>
-                <TouchableOpacity
-                  style={styles.exportBtn}
-                  onPress={() => handleExportPDF(cert)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.exportBtnText}>📤 Export PDF</Text>
-                </TouchableOpacity>
-              </View>
-            ))
-          )}
-        </ScrollView>
+        <View style={styles.accessDeniedWrap}>
+          <Text style={styles.accessDeniedIcon}>🔒</Text>
+          <Text style={styles.accessDeniedTitle}>Doctors Only</Text>
+          <Text style={styles.accessDeniedText}>
+            Medical certificates can only be issued by a doctor account.
+          </Text>
+        </View>
       </View>
     );
   }
 
-  // ── VIEW 2: Issue Form ──────────────────────────────────────────────────────
   return (
     <View style={styles.container}>
       <ScrollView
         style={styles.scroller}
         contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        <Text style={styles.promptHeadline}>Issue a Medical Certificate</Text>
-
-        {/* SELECT PATIENT BUTTON */}
-        <TouchableOpacity
-          style={styles.selectPatientBtn}
-          onPress={() => setShowPatientPicker(true)}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.selectPatientIcon}>👤</Text>
-          <Text style={styles.selectPatientText}>
-            Select from Patient Records
-          </Text>
-          <Text style={styles.selectPatientChevron}>›</Text>
-        </TouchableOpacity>
-
-        <View style={styles.orDivider}>
-          <View style={styles.orLine} />
-          <Text style={styles.orText}>or enter manually</Text>
-          <View style={styles.orLine} />
-        </View>
-
-        {/* LAST NAME */}
-        <View style={styles.fieldWrapper}>
-          <Text style={styles.fieldLabelText}>Patient's Last Name</Text>
-          <View style={styles.inputContainerRow}>
-            <TextInput
-              style={styles.fieldInput}
-              value={patientLastName}
-              onChangeText={setPatientLastName}
-              placeholder="Enter last name"
-              placeholderTextColor="#94a3b8"
-            />
-            {patientLastName.length > 0 && (
-              <TouchableOpacity
-                onPress={() => setPatientLastName("")}
-                style={styles.clearBtnClick}
-              >
-                <Text style={styles.clearBtnSymbol}>×</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-
-        {/* FIRST NAME */}
-        <View style={styles.fieldWrapper}>
-          <Text style={styles.fieldLabelText}>Patient's First Name</Text>
-          <View style={styles.inputContainerRow}>
-            <TextInput
-              style={styles.fieldInput}
-              value={patientFirstName}
-              onChangeText={setPatientFirstName}
-              placeholder="Enter first name"
-              placeholderTextColor="#94a3b8"
-            />
-            {patientFirstName.length > 0 && (
-              <TouchableOpacity
-                onPress={() => setPatientFirstName("")}
-                style={styles.clearBtnClick}
-              >
-                <Text style={styles.clearBtnSymbol}>×</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-
-        {/* GENDER */}
-        <View style={styles.fieldWrapper}>
-          <Text style={styles.fieldLabelText}>Gender</Text>
-          <View style={styles.radioFlexContainer}>
-            {(["Male", "Female"] as const).map((g) => (
-              <TouchableOpacity
-                key={g}
-                style={styles.radioButtonOption}
-                onPress={() => setPatientGender(g)}
-                activeOpacity={0.8}
-              >
-                <View
-                  style={[
-                    styles.outerRadioRing,
-                    patientGender === g && styles.activeOuterRing,
-                  ]}
-                >
-                  {patientGender === g && <View style={styles.innerRadioDot} />}
-                </View>
-                <Text style={styles.radioOptionLabelText}>{g}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* BIRTHDATE */}
-        <View style={styles.fieldWrapper}>
-          <Text style={styles.fieldLabelText}>
-            Date of Birth{" "}
-            {birthdateObj && (
-              <Text style={styles.ageInline}>
-                ({calculateAge(birthdateObj)} years old)
-              </Text>
-            )}
-          </Text>
-          <TouchableOpacity
-            style={styles.inputContainerRow}
-            onPress={() => setShowDatePicker(true)}
-            activeOpacity={0.7}
-          >
-            <TextInput
-              style={styles.fieldInput}
-              value={birthdateDisplay} // derived from birthdateObj
-              placeholder="Select date of birth"
-              placeholderTextColor="#94a3b8"
-              editable={false}
-              pointerEvents="none"
-            />
-            <Text style={styles.calendarInlineIcon}>📅</Text>
-          </TouchableOpacity>
-        </View>
-
-        {showDatePicker && (
-          <DateTimePicker
-            value={dateValue}
-            mode="date"
-            display={Platform.OS === "ios" ? "spinner" : "default"}
-            onChange={onDateChange}
-            maximumDate={new Date()}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => loadPatients(true)}
+            tintColor="#095c29"
           />
-        )}
-
-        {/* COMPLAINTS */}
-        <View style={styles.fieldWrapper}>
-          <Text style={styles.fieldLabelText}>Complaints</Text>
-          <View style={[styles.inputContainerRow, styles.textAreaContainer]}>
-            <TextInput
-              style={[styles.fieldInput, styles.textArea]}
-              value={complaints}
-              onChangeText={setComplaints}
-              placeholder="Patient's chief complaints (e.g. fever and nasal catarrh)"
-              placeholderTextColor="#94a3b8"
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-            />
-          </View>
-        </View>
-
-        {/* DIAGNOSIS */}
-        <View style={styles.fieldWrapper}>
-          <Text style={styles.fieldLabelText}>Diagnosis</Text>
-          <View style={[styles.inputContainerRow, styles.textAreaContainer]}>
-            <TextInput
-              style={[styles.fieldInput, styles.textArea]}
-              value={diagnosis}
-              onChangeText={setDiagnosis}
-              placeholder="Clinical diagnosis (e.g. Upper Respiratory Tract Infection)"
-              placeholderTextColor="#94a3b8"
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-            />
-          </View>
-        </View>
-
-        {/* RECOMMENDATION */}
-        <View style={styles.fieldWrapper}>
-          <Text style={styles.fieldLabelText}>Recommendation</Text>
-          <View style={[styles.inputContainerRow, styles.textAreaContainer]}>
-            <TextInput
-              style={[styles.fieldInput, styles.textArea]}
-              value={recommendation}
-              onChangeText={setRecommendation}
-              placeholder="Doctor's recommendation (e.g. rest for 5 days)"
-              placeholderTextColor="#94a3b8"
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-            />
-          </View>
-        </View>
-
-        {/* INFO BOX */}
-        <View style={styles.infoAlertContainerBox}>
-          <Text style={styles.infoBadgeIndicatorIcon}>ⓘ</Text>
-          <View style={styles.infoAlertContentBodyTextGroup}>
-            <Text style={styles.infoAlertMessageTextInline}>
-              Issuing this certificate will generate a unique certificate ID.
-            </Text>
-            <Text style={styles.infoAlertSubtextInline}>
-              After issuing, you can export the certificate as a PDF to print,
-              share, or send via email.
-            </Text>
-          </View>
-        </View>
-      </ScrollView>
-
-      {/* ISSUE BUTTON */}
-      <View style={styles.bottomActionBarWrapper}>
-        <TouchableOpacity
-          style={[
-            styles.nextActionButtonCall,
-            isSubmitting && { backgroundColor: "#82b27a" },
-          ]}
-          onPress={handleIssue}
-          disabled={isSubmitting}
-          activeOpacity={0.9}
-        >
-          <Text style={styles.nextActionButtonLabelText}>
-            {isSubmitting ? "ISSUING..." : "ISSUE CERTIFICATE"}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* PATIENT PICKER MODAL */}
-      <Modal
-        visible={showPatientPicker}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShowPatientPicker(false)}
+        }
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select a Patient</Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setShowPatientPicker(false);
-                  setPatientSearch("");
-                }}
-              >
-                <Text style={styles.modalDoneText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.modalSearchContainer}>
-              <Text style={styles.modalSearchIcon}>🔍</Text>
-              <TextInput
-                style={styles.modalSearchInput}
-                value={patientSearch}
-                onChangeText={setPatientSearch}
-                placeholder="Search by name..."
-                placeholderTextColor="#94a3b8"
-                autoCapitalize="none"
-              />
-              {patientSearch.length > 0 && (
-                <TouchableOpacity
-                  onPress={() => setPatientSearch("")}
-                  style={styles.clearBtnClick}
-                >
-                  <Text style={styles.clearBtnSymbol}>×</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-
-            <FlatList
-              data={filteredPatients}
-              keyExtractor={(item) => item.id}
-              showsVerticalScrollIndicator={false}
-              ListEmptyComponent={
-                <Text style={styles.modalEmptyText}>
-                  No patients match "{patientSearch}".
-                </Text>
-              }
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.patientPickerRow}
-                  onPress={() => handleSelectPatient(item)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.patientPickerAvatar}>
-                    <Text style={styles.patientPickerAvatarText}>
-                      {item.firstName[0]}
-                      {item.lastName[0]}
-                    </Text>
-                  </View>
-                  <View style={styles.patientPickerInfo}>
-                    <Text style={styles.patientPickerName}>
-                      {item.lastName}, {item.firstName}
-                    </Text>
-                    <Text style={styles.patientPickerSub}>
-                      {item.gender} • {formatDisplayDate(item.birthdate)}
-                    </Text>
-                  </View>
-                  <Text style={styles.patientPickerChevron}>›</Text>
-                </TouchableOpacity>
-              )}
-            />
-          </View>
+        {/* Search Bar */}
+        <View style={styles.searchBarWrapper}>
+          <TextInput
+            style={styles.searchBarInput}
+            placeholder="Search patients by name..."
+            placeholderTextColor="#94a3b8"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setSearchQuery("")}
+              style={styles.clearBtnClick}
+            >
+              <Text style={styles.clearBtnSymbol}>×</Text>
+            </TouchableOpacity>
+          )}
         </View>
-      </Modal>
+
+        {/* List Header */}
+        <View style={styles.listHeaderRow}>
+          <Text style={styles.promptHeadline}>
+            Patients{" "}
+            <Text style={styles.patientCount}>({filteredPatients.length})</Text>
+          </Text>
+        </View>
+
+        {/* Loading State */}
+        {isLoading ? (
+          <View style={{ alignItems: "center", marginTop: 48 }}>
+            <ActivityIndicator size="large" color="#095c29" />
+            <Text style={[styles.emptyText, { marginTop: 12 }]}>
+              Loading patients...
+            </Text>
+          </View>
+        ) : filteredPatients.length === 0 ? (
+          <Text style={styles.emptyText}>
+            {searchQuery
+              ? "No patients match your search."
+              : "No patients with consultation records found."}
+          </Text>
+        ) : (
+          filteredPatients.map((patient) => (
+            <TouchableOpacity
+              key={patient.id}
+              style={styles.patientCard}
+              onPress={() => handleSelectPatient(patient)}
+              activeOpacity={0.75}
+              disabled={loadingPatientId === patient.id}
+            >
+              <View style={styles.cardInfoGroup}>
+                <Text style={styles.cardNameText}>
+                  {patient.last_name}, {patient.first_name}
+                </Text>
+                <Text style={styles.cardSubDetails}>
+                  {patient.gender
+                    ? patient.gender.charAt(0).toUpperCase() + patient.gender.slice(1)
+                    : "—"}{" "}
+                  • DOB: {patient.birthdate ?? "—"}
+                </Text>
+              </View>
+
+              {loadingPatientId === patient.id ? (
+                <ActivityIndicator size="small" color="#095c29" />
+              ) : (
+                <Text style={styles.chevron}>›</Text>
+              )}
+            </TouchableOpacity>
+          ))
+        )}
+      </ScrollView>
     </View>
   );
 }
-
-// ── Styles ────────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#ffffff" },
-  scroller: { flex: 1 },
-  content: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 40 },
-
-  listHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  promptHeadline: { fontSize: 20, fontWeight: "700", color: "#1e293b" },
-  addBtn: {
-    backgroundColor: "#095c29",
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-  },
-  addBtnText: { color: "#fff", fontWeight: "600", fontSize: 14 },
-
-  emptyState: { alignItems: "center", marginTop: 60, gap: 8 },
-  emptyIcon: { fontSize: 48, marginBottom: 8 },
-  emptyText: { fontSize: 16, fontWeight: "700", color: "#1e293b" },
-  emptySubtext: { fontSize: 14, color: "#64748b", textAlign: "center" },
-
-  card: {
-    backgroundColor: "#f8fafc",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 12,
-    gap: 4,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 6,
-  },
-  cardName: { fontSize: 16, fontWeight: "700", color: "#0f172a", flex: 1 },
-  cardDate: {
-    fontSize: 12,
-    color: "#94a3b8",
-    fontWeight: "500",
-    marginLeft: 8,
-  },
-  cardDetail: { fontSize: 13, color: "#475569", lineHeight: 18 },
-  cardId: { fontSize: 11, color: "#94a3b8", marginTop: 4 },
-  exportBtn: {
-    marginTop: 10,
-    backgroundColor: "#095c29",
-    borderRadius: 8,
-    paddingVertical: 10,
-    alignItems: "center",
-  },
-  exportBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
-
-  selectPatientBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#f0fdf4",
-    borderWidth: 1.5,
-    borderColor: "#095c29",
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    marginBottom: 20,
-    gap: 10,
-  },
-  selectPatientIcon: { fontSize: 18 },
-  selectPatientText: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#095c29",
-  },
-  selectPatientChevron: { fontSize: 20, color: "#095c29", fontWeight: "600" },
-
-  orDivider: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 20,
-  },
-  orLine: { flex: 1, height: 1, backgroundColor: "#e2e8f0" },
-  orText: { fontSize: 13, color: "#94a3b8", fontWeight: "500" },
-
-  fieldWrapper: { marginBottom: 20 },
-  fieldLabelText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#475569",
-    marginBottom: 8,
-  },
-  ageInline: { fontSize: 13, fontWeight: "400", color: "#095c29" },
-  inputContainerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#f8fafc",
-    borderWidth: 1,
-    borderColor: "#cbd5e1",
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    height: 52,
-  },
-  textAreaContainer: {
-    height: "auto",
-    minHeight: 90,
-    alignItems: "flex-start",
-    paddingVertical: 12,
-  },
-  fieldInput: { flex: 1, fontSize: 16, color: "#0f172a", height: "100%" },
-  textArea: { height: undefined, minHeight: 66 },
-  clearBtnClick: { padding: 4, justifyContent: "center", alignItems: "center" },
-  clearBtnSymbol: { fontSize: 20, color: "#94a3b8" },
-  calendarInlineIcon: { fontSize: 18, color: "#94a3b8" },
-
-  radioFlexContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 28,
-    paddingVertical: 4,
-  },
-  radioButtonOption: { flexDirection: "row", alignItems: "center", gap: 8 },
-  outerRadioRing: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: "#cbd5e1",
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#ffffff",
-  },
-  activeOuterRing: { borderColor: "#095c29" },
-  innerRadioDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: "#095c29",
-  },
-  radioOptionLabelText: { fontSize: 16, color: "#334155", fontWeight: "500" },
-
-  infoAlertContainerBox: {
-    flexDirection: "row",
-    backgroundColor: "#f0fdf4",
-    borderRadius: 12,
-    padding: 14,
-    gap: 12,
-    marginTop: 4,
-    borderWidth: 1,
-    borderColor: "#dcfce7",
-  },
-  infoBadgeIndicatorIcon: {
-    fontSize: 18,
-    color: "#095c29",
-    fontWeight: "bold",
-    marginTop: 1,
-  },
-  infoAlertContentBodyTextGroup: { flex: 1, gap: 8 },
-  infoAlertMessageTextInline: {
-    fontSize: 14,
-    color: "#166534",
-    lineHeight: 20,
-    fontWeight: "500",
-  },
-  infoAlertSubtextInline: { fontSize: 13, color: "#3f6212", lineHeight: 18 },
-
-  bottomActionBarWrapper: {
-    paddingHorizontal: 20,
-    paddingBottom: 24,
-    paddingTop: 12,
-    backgroundColor: "#ffffff",
-    borderTopWidth: 1,
-    borderTopColor: "#f1f5f9",
-  },
-  nextActionButtonCall: {
-    backgroundColor: "#095c29",
-    height: 54,
-    borderRadius: 10,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#095c29",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  nextActionButtonLabelText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "700",
-    letterSpacing: 0.5,
-  },
-
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    justifyContent: "flex-end",
-  },
-  modalSheet: {
-    backgroundColor: "#ffffff",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-    maxHeight: "75%",
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 18,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f1f5f9",
-    marginBottom: 12,
-  },
-  modalTitle: { fontSize: 17, fontWeight: "700", color: "#1e293b" },
-  modalDoneText: { fontSize: 15, fontWeight: "700", color: "#ef4444" },
-  modalSearchContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#f8fafc",
-    borderWidth: 1,
-    borderColor: "#cbd5e1",
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    height: 46,
-    marginBottom: 12,
-  },
-  modalSearchIcon: { fontSize: 16, marginRight: 8 },
-  modalSearchInput: { flex: 1, fontSize: 15, color: "#0f172a", height: "100%" },
-  modalEmptyText: {
-    textAlign: "center",
-    color: "#64748b",
-    marginTop: 30,
-    fontSize: 14,
-  },
-
-  patientPickerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f1f5f9",
-    gap: 12,
-  },
-  patientPickerAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: "#095c29",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  patientPickerAvatarText: { color: "#fff", fontWeight: "700", fontSize: 14 },
-  patientPickerInfo: { flex: 1, gap: 3 },
-  patientPickerName: { fontSize: 15, fontWeight: "600", color: "#0f172a" },
-  patientPickerSub: { fontSize: 13, color: "#64748b" },
-  patientPickerChevron: { fontSize: 22, color: "#cbd5e1", fontWeight: "400" },
-});

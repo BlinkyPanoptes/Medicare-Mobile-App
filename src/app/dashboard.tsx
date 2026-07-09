@@ -1,3 +1,10 @@
+import { fetchQueue } from "@/api/queue";
+import { useAuth } from "@/components/context/auth-context";
+import { ButtonCard, Card } from "@/components/ui";
+import { dashboardStyles as styles } from "@/styles/dashboardStyles";
+import { Clinic } from "@/types/clinic";
+import { UserRole } from "@/types/user";
+import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import {
   Modal,
@@ -8,19 +15,10 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { router } from "expo-router";
-import { useFocusEffect } from "expo-router";
-import { useAuth } from "@/components/context/auth-context";
-import { ButtonCard, Card } from "@/components/ui";
-import { dashboardStyles as styles } from "@/styles/dashboardStyles";
-import { Clinic } from "@/types/clinic";
-import { UserRole } from "@/types/user";
-import { fetchQueue } from "@/api/queue";
 
 type ButtonRoute =
   | "/patient-records"
   | "/consultations"
-  | "/transactions"
   | "/brand-directory"
   | "/generics"
   | "/diseases"
@@ -74,8 +72,6 @@ export default function Dashboard() {
   const clinicButtons: ButtonItem[] = [
     { label: "Patient Records", route: "/patient-records", icon: "🩺", description: "View and manage patient information", allowedRoles: ["doctor", "assistant"] },
     { label: "Consultations", route: "/consultations", icon: "📋", description: "Manage prescriptions and medical certificates", allowedRoles: ["doctor"] },
-    { label: "Transactions", route: "/transactions", icon: "💳", description: "View previous consultations", allowedRoles: ["doctor", "assistant"] },
-    { label: "Medical Certificate", route: "/medical-certificate", icon: "📄", description: "Generate verified medical clearance files", allowedRoles: ["doctor"] },
   ];
 
   const drugButtons: ButtonItem[] = [

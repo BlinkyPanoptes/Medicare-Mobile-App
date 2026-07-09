@@ -124,6 +124,57 @@ export const newPrescriptionStyles = StyleSheet.create({
     borderBottomRightRadius: 10,
     paddingHorizontal: 14,
   },
+
+  // ─── Civil Status pills ────────────────────────────────────────────────────
+
+  civilStatusRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  civilStatusPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  civilStatusPillActive: {
+    backgroundColor: "#dcfce7",
+    borderColor: "#166534",
+  },
+  civilStatusPillInactive: {
+    backgroundColor: "#f1f5f9",
+    borderColor: "#cbd5e1",
+  },
+  civilStatusPillTextActive: {
+    color: "#166534",
+  },
+  civilStatusPillTextInactive: {
+    color: "#475569",
+  },
+
+  // ─── Row layout (Height/Weight, Temp/BP) ───────────────────────────────────
+
+  fieldRowSplit: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  fieldRowSplitItem: {
+    flex: 1,
+  },
+
+  // ─── Allergies textarea ────────────────────────────────────────────────────
+
+  allergiesInput: {
+    height: 80,
+    textAlignVertical: "top",
+    paddingTop: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 10,
+  },
+
   infoAlertContainerBox: {
     flexDirection: "row",
     backgroundColor: "#f0fdf4",
@@ -265,5 +316,57 @@ export const newPrescriptionStyles = StyleSheet.create({
     fontSize: 22,
     color: "#cbd5e1",
     fontWeight: "300",
+  },
+
+  // ─── Floating Field Bar (tap-to-edit bar above the keyboard) ────────────────
+
+  floatingBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "transparent",
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  floatingBar: {
+    backgroundColor: "#2a2d3a",
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 24,
+  },
+  floatingLabel: {
+    fontSize: 12,
+    color: "#94a3b8",
+    marginBottom: 8,
+  },
+  floatingInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#095c29",
+    borderRadius: 10,
+    backgroundColor: "#1e2130",
+    paddingHorizontal: 14,
+    minHeight: 52,
+  },
+  floatingDisplayText: {
+    flex: 1,
+    fontSize: 16,
+    color: "#ffffff",
+    paddingVertical: 10,
+  },
+  floatingSubmitBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#095c29",
+    justifyContent: "center",
+    alignItems: "center",
+    marginLeft: 10,
+  },
+  floatingSubmitIcon: {
+    color: "#ffffff",
+    fontSize: 18,
+    fontWeight: "bold",
   },
 });
